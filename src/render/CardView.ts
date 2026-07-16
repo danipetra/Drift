@@ -1,14 +1,18 @@
 import { Container, Graphics, Text } from "pixi.js";
-import type { CardData } from "../types/card";
 import { MODIFIER_LABELS } from "../types/card";
+import type { CardInstance } from "../game/CardInstance";
 import { FRAME_STYLES } from "./frames";
 
 export const CARD_WIDTH = 140;
 export const CARD_HEIGHT = 200;
 
 export class CardView extends Container {
-  constructor(data: CardData) {
+  readonly instance: CardInstance;
+
+  constructor(instance: CardInstance) {
     super();
+    this.instance = instance;
+    const data = instance.data;
 
     const style = FRAME_STYLES[data.type];
 
@@ -58,14 +62,14 @@ export class CardView extends Container {
     }
 
     const attack = new Text({
-      text: data.attack,
+      text: instance.attackText,
       style: { fontFamily: "sans-serif", fontSize: 18, fontWeight: "bold", fill: 0xff8a65 },
     });
     attack.position.set(10, CARD_HEIGHT - 26);
     this.addChild(attack);
 
     const defense = new Text({
-      text: data.defense,
+      text: instance.defenseText,
       style: { fontFamily: "sans-serif", fontSize: 18, fontWeight: "bold", fill: 0x81d4fa },
     });
     defense.position.set(CARD_WIDTH - 10 - defense.width, CARD_HEIGHT - 26);

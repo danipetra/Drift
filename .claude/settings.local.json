@@ -1,7 +1,14 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm -v)"
+      "Bash(npm -v)",
+      "Bash(npx tsc *)",
+      "Bash(taskkill //PID 16800 //F)",
+      "Bash(netstat -ano)",
+      "PowerShell(Stop-Process -Id 16800 -Force -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-NetTCPConnection -LocalPort 5173 -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-Process -Id 16800)",
+      "PowerShell(& taskkill /F /PID 16800)"
     ]
   }
 }

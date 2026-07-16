@@ -1,6 +1,6 @@
 import { Container, Graphics } from "pixi.js";
 import { CARD_WIDTH, CARD_HEIGHT, CardView } from "../render/CardView";
-import type { CardData } from "../types/card";
+import type { CardInstance } from "../game/CardInstance";
 
 const SLOT_GAP = 12;
 
@@ -41,19 +41,19 @@ export class Lane extends Container {
       .fill({ color: 0xffffff, alpha: 0.04 });
   }
 
-  setCard(slot: number, data: CardData | undefined): void {
+  setCard(slot: number, instance: CardInstance | undefined): void {
     const existing = this.cardViews[slot];
     if (existing) {
       this.removeChild(existing);
       existing.destroy();
     }
 
-    if (!data) {
+    if (!instance) {
       this.cardViews[slot] = undefined;
       return;
     }
 
-    const view = new CardView(data);
+    const view = new CardView(instance);
     view.position.set(slot * (CARD_WIDTH + SLOT_GAP), 0);
     this.cardViews[slot] = view;
     this.addChild(view);
