@@ -1,0 +1,26 @@
+[
+  {
+    "id": "robot_sentry",
+    "name": "Sentinella Automatica",
+    "type": "robot",
+    "attack": "2",
+    "defense": "2",
+    "modifiers": ["GUARD", "STEALTH"]
+  },
+  {
+    "id": "robot_drone",
+    "name": "Drone da Ricognizione",
+    "type": "robot",
+    "attack": "1",
+    "defense": "1",
+    "modifiers": ["FLYING"]
+  },
+  {
+    "id": "robot_breaker",
+    "name": "Frantumatore Cingolato",
+    "type": "robot",
+    "attack": "4",
+    "defense": "3",
+    "modifiers": ["DEADLY"]
+  }
+]

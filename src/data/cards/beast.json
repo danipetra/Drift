@@ -1,0 +1,26 @@
+[
+  {
+    "id": "beast_wolf",
+    "name": "Lupo Grigio",
+    "type": "beast",
+    "attack": "2",
+    "defense": "1",
+    "modifiers": ["FIRST_STRIKE"]
+  },
+  {
+    "id": "beast_hawk",
+    "name": "Falco Rapace",
+    "type": "beast",
+    "attack": "1",
+    "defense": "1",
+    "modifiers": ["FLYING", "DEADLY"]
+  },
+  {
+    "id": "beast_bear",
+    "name": "Orso Bruno",
+    "type": "beast",
+    "attack": "3",
+    "defense": "4",
+    "modifiers": ["GUARD"]
+  }
+]
