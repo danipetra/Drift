@@ -8,7 +8,20 @@
       "PowerShell(Stop-Process -Id 16800 -Force -ErrorAction SilentlyContinue)",
       "PowerShell(Get-NetTCPConnection -LocalPort 5173 -ErrorAction SilentlyContinue)",
       "PowerShell(Get-Process -Id 16800)",
-      "PowerShell(& taskkill /F /PID 16800)"
+      "PowerShell(& taskkill /F /PID 16800)",
+      "Skill(run)",
+      "Skill(run:*)",
+      "Bash(sleep 2; cat /tmp/vite.log)",
+      "Read(//tmp/**)",
+      "Bash(npm ls *)",
+      "Bash(npx --version)",
+      "Bash(npx -y playwright@latest install chromium --with-deps)",
+      "Bash(npm install *)",
+      "Bash(node \"C:\\\\Users\\\\dani9\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\d--Downloads-Snippets-Drift\\\\270e620d-eebb-4d45-9633-37834f289811\\\\scratchpad\\\\shot.mjs\" \"/d/Downloads/Snippets/Drift/docs/screenshots\")",
+      "Bash(cp \"C:\\\\Users\\\\dani9\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\d--Downloads-Snippets-Drift\\\\270e620d-eebb-4d45-9633-37834f289811\\\\scratchpad\\\\shot.mjs\" /d/Downloads/Snippets/Drift/scratch-shot.mjs)",
+      "Bash(node scratch-shot.mjs \"/d/Downloads/Snippets/Drift/docs/screenshots\")",
+      "Bash(npm uninstall *)",
+      "Bash(git checkout *)"
     ]
   }
 }
