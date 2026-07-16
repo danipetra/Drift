@@ -1,111 +1,123 @@
 import { Modifier } from "../types/card";
-import type { BoardState, RowKey } from "./BoardState";
+import { laneRoleOf, ROW_KEYS, type BoardState, type RowKey, type Side } from "./BoardState";
 import type { CardInstance } from "./CardInstance";
 
-interface AttackPair {
-  attackerRow: RowKey;
-  defenderRow: RowKey;
-  defenderFace: "player" | "opponent";
+export interface AttackDeclaration {
+  row: RowKey;
+  slot: number;
 }
 
-const ATTACK_PAIRS: AttackPair[] = [
-  { attackerRow: "playerMelee", defenderRow: "opponentMelee", defenderFace: "opponent" },
-  { attackerRow: "playerRanged", defenderRow: "opponentRanged", defenderFace: "opponent" },
-  { attackerRow: "opponentMelee", defenderRow: "playerMelee", defenderFace: "player" },
-  { attackerRow: "opponentRanged", defenderRow: "playerRanged", defenderFace: "player" },
-];
+export interface BlockDeclaration {
+  attackerRow: RowKey;
+  attackerSlot: number;
+  blockerRow: RowKey;
+  blockerSlot: number;
+}
 
 export interface CombatEvent {
-  type: "attack" | "miss" | "death" | "face-damage";
+  type: "attack" | "death" | "face-damage";
   message: string;
 }
 
-export function resolveCombatRound(state: BoardState): CombatEvent[] {
+/** Una carta può bloccare un attacco solo se: stessa corsia (melee/ranged), non è già impegnata,
+ * l'attaccante non è furtivo, e se l'attaccante vola anche la bloccante deve volare. */
+export function canBlock(
+  state: BoardState,
+  attackerRow: RowKey,
+  attackerSlot: number,
+  blockerRow: RowKey,
+  blockerSlot: number,
+): boolean {
+  const attacker = state.getCard(attackerRow, attackerSlot);
+  const blocker = state.getCard(blockerRow, blockerSlot);
+  if (!attacker || !blocker || blocker.tapped) return false;
+  if (laneRoleOf(attackerRow) !== laneRoleOf(blockerRow)) return false;
+  if (attacker.hasModifier(Modifier.Stealth)) return false;
+  if (attacker.hasModifier(Modifier.Flying) && !blocker.hasModifier(Modifier.Flying)) return false;
+  return true;
+}
+
+/** Una carta Guardia disponibile e con almeno un bersaglio legale deve comparire tra i blocchi. */
+export function guardObligationsSatisfied(
+  state: BoardState,
+  defendingSide: Side,
+  defendingRows: RowKey[],
+  attackers: AttackDeclaration[],
+  blocks: BlockDeclaration[],
+): boolean {
+  for (const row of defendingRows) {
+    for (let slot = 0; slot < state.slotCount; slot++) {
+      const guard = state.getCard(row, slot);
+      if (!guard || guard.tapped || !guard.hasModifier(Modifier.Guard)) continue;
+      const hasLegalTarget = attackers.some((a) => canBlock(state, a.row, a.slot, row, slot));
+      if (!hasLegalTarget) continue;
+      const isUsed = blocks.some((b) => b.blockerRow === row && b.blockerSlot === slot);
+      if (!isUsed) return false;
+    }
+  }
+  return true;
+}
+
+export function resolveCombat(
+  state: BoardState,
+  attackingSide: Side,
+  attackers: AttackDeclaration[],
+  blocks: BlockDeclaration[],
+): CombatEvent[] {
   const events: CombatEvent[] = [];
+  const defendingSide: Side = attackingSide === "player" ? "opponent" : "player";
 
-  for (const pair of ATTACK_PAIRS) resolvePairAttacks(state, pair, events, true);
-  removeDeadCards(state, events);
-
-  for (const pair of ATTACK_PAIRS) resolvePairAttacks(state, pair, events, false);
-  removeDeadCards(state, events);
-
-  return events;
-}
-
-function resolvePairAttacks(
-  state: BoardState,
-  pair: AttackPair,
-  events: CombatEvent[],
-  firstStrikePhase: boolean,
-): void {
-  for (let slot = 0; slot < state.slotCount; slot++) {
-    const attacker = state.getCard(pair.attackerRow, slot);
-    if (!attacker || attacker.isDead) continue;
-
-    const isFirstStrike = attacker.hasModifier(Modifier.FirstStrike);
-    if (firstStrikePhase !== isFirstStrike) continue;
-
-    resolveSingleAttack(state, pair, slot, attacker, events);
-  }
-}
-
-function resolveSingleAttack(
-  state: BoardState,
-  pair: AttackPair,
-  slot: number,
-  attacker: CardInstance,
-  events: CombatEvent[],
-): void {
-  let defender = state.getCard(pair.defenderRow, slot);
-  if (defender?.hasModifier(Modifier.Stealth)) {
-    defender = undefined;
+  interface Duel {
+    attacker: CardInstance;
+    blocker?: CardInstance;
   }
 
-  const target = defender ?? findGuard(state, pair.defenderRow);
-
-  if (!target) {
-    const amount = attacker.currentAttack;
-    if (pair.defenderFace === "player") state.playerHealth -= amount;
-    else state.opponentHealth -= amount;
-    events.push({
-      type: "face-damage",
-      message: `${attacker.data.name} colpisce direttamente per ${amount}`,
-    });
-    return;
+  const duels: Duel[] = [];
+  for (const ref of attackers) {
+    const attacker = state.getCard(ref.row, ref.slot);
+    if (!attacker) continue;
+    attacker.tapped = true;
+    const block = blocks.find((b) => b.attackerRow === ref.row && b.attackerSlot === ref.slot);
+    const blocker = block ? state.getCard(block.blockerRow, block.blockerSlot) : undefined;
+    duels.push({ attacker, blocker });
   }
 
-  if (target.hasModifier(Modifier.Flying) && !attacker.hasModifier(Modifier.Flying)) {
-    events.push({
-      type: "miss",
-      message: `${attacker.data.name} manca ${target.data.name} (volare)`,
-    });
-    return;
+  for (const duel of duels) {
+    if (!duel.blocker) {
+      const amount = duel.attacker.currentAttack;
+      if (defendingSide === "player") state.playerHealth -= amount;
+      else state.opponentHealth -= amount;
+      events.push({
+        type: "face-damage",
+        message: `${duel.attacker.data.name} colpisce direttamente per ${amount}`,
+      });
+    }
   }
 
-  const amount = attacker.currentAttack;
-  target.currentDefense -= amount;
-  if (attacker.hasModifier(Modifier.Deadly) && amount > 0) {
-    target.currentDefense = 0;
-  }
-  events.push({
-    type: "attack",
-    message: `${attacker.data.name} infligge ${amount} a ${target.data.name}`,
-  });
-}
+  const engaged = duels.filter((d): d is Duel & { blocker: CardInstance } => Boolean(d.blocker));
 
-function findGuard(state: BoardState, row: RowKey): CardInstance | undefined {
-  return state.rows[row].find((card) => card && !card.isDead && card.hasModifier(Modifier.Guard));
-}
+  const strike = (from: CardInstance, to: CardInstance) => {
+    if (from.isDead || to.isDead) return;
+    const amount = from.currentAttack;
+    to.currentDefense -= amount;
+    if (from.hasModifier(Modifier.Deadly) && amount > 0) to.currentDefense = 0;
+    events.push({ type: "attack", message: `${from.data.name} infligge ${amount} a ${to.data.name}` });
+  };
 
-function removeDeadCards(state: BoardState, events: CombatEvent[]): void {
-  for (const row of Object.keys(state.rows) as RowKey[]) {
-    const slots = state.rows[row];
-    for (let slot = 0; slot < slots.length; slot++) {
-      const card = slots[slot];
+  for (const duel of engaged) if (duel.attacker.hasModifier(Modifier.FirstStrike)) strike(duel.attacker, duel.blocker);
+  for (const duel of engaged) if (duel.blocker.hasModifier(Modifier.FirstStrike)) strike(duel.blocker, duel.attacker);
+  for (const duel of engaged) if (!duel.attacker.hasModifier(Modifier.FirstStrike)) strike(duel.attacker, duel.blocker);
+  for (const duel of engaged) if (!duel.blocker.hasModifier(Modifier.FirstStrike)) strike(duel.blocker, duel.attacker);
+
+  for (const row of ROW_KEYS) {
+    for (let slot = 0; slot < state.slotCount; slot++) {
+      const card = state.getCard(row, slot);
       if (card?.isDead) {
         events.push({ type: "death", message: `${card.data.name} muore` });
         state.setCard(row, slot, undefined);
       }
     }
   }
+
+  return events;
 }

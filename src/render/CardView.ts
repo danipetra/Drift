@@ -8,11 +8,14 @@ export const CARD_HEIGHT = 200;
 
 export class CardView extends Container {
   readonly instance: CardInstance;
+  private readonly outline: Graphics;
 
   constructor(instance: CardInstance) {
     super();
     this.instance = instance;
     const data = instance.data;
+
+    if (instance.tapped) this.alpha = 0.45;
 
     const style = FRAME_STYLES[data.type];
 
@@ -74,5 +77,27 @@ export class CardView extends Container {
     });
     defense.position.set(CARD_WIDTH - 10 - defense.width, CARD_HEIGHT - 26);
     this.addChild(defense);
+
+    this.outline = new Graphics();
+    this.addChild(this.outline);
+  }
+
+  setOutline(color: number | null): void {
+    this.outline.clear();
+    if (color !== null) {
+      this.outline.roundRect(-4, -4, CARD_WIDTH + 8, CARD_HEIGHT + 8, 12).stroke({ width: 4, color });
+    }
+  }
+
+  setInteractive(onClick: (() => void) | null): void {
+    this.removeAllListeners("pointertap");
+    if (onClick) {
+      this.eventMode = "static";
+      this.cursor = "pointer";
+      this.on("pointertap", onClick);
+    } else {
+      this.eventMode = "none";
+      this.cursor = "default";
+    }
   }
 }

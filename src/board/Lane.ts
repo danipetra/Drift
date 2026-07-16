@@ -58,4 +58,12 @@ export class Lane extends Container {
     this.cardViews[slot] = view;
     this.addChild(view);
   }
+
+  setOutline(slot: number, color: number | null): void {
+    this.cardViews[slot]?.setOutline(color);
+  }
+
+  setInteractive(slot: number, onClick: (() => void) | null): void {
+    this.cardViews[slot]?.setInteractive(onClick);
+  }
 }

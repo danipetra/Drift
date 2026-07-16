@@ -7,6 +7,7 @@ export class CardInstance {
   readonly data: CardData;
   currentAttack: number;
   currentDefense: number;
+  tapped = false;
 
   constructor(data: CardData) {
     this.instanceId = nextInstanceId++;

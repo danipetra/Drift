@@ -34,16 +34,28 @@ body {
 #hud {
   flex: 0 0 auto;
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px;
+  flex-direction: column;
+  gap: 8px;
   padding: 10px 12px;
   font-family: sans-serif;
   background: #16181d;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-#end-turn {
+#hud-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+#status {
+  font-size: 13px;
+  font-weight: bold;
+  color: #d8d8d8;
+}
+
+#action-button {
   flex: 0 0 auto;
   padding: 10px 20px;
   font-size: 14px;
@@ -55,7 +67,7 @@ body {
   cursor: pointer;
 }
 
-#end-turn:disabled {
+#action-button:disabled {
   opacity: 0.5;
   cursor: default;
 }

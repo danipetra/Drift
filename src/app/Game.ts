@@ -2,20 +2,39 @@ import { Application } from "pixi.js";
 import { Board } from "../board/Board";
 import { Lane } from "../board/Lane";
 import { getCardsByType } from "../data/cardLoader";
-import { BoardState, ROW_KEYS, type RowKey } from "../game/BoardState";
+import { aiChooseAttackers, aiChooseBlocks } from "../game/ai";
+import { BoardState, lanesOfSide, type RowKey, type Side } from "../game/BoardState";
 import { CardInstance } from "../game/CardInstance";
-import { resolveCombatRound, type CombatEvent } from "../game/combat";
+import {
+  canBlock,
+  guardObligationsSatisfied,
+  resolveCombat,
+  type AttackDeclaration,
+  type BlockDeclaration,
+  type CombatEvent,
+} from "../game/combat";
 import type { CardData } from "../types/card";
 
 const SLOT_COUNT = 4;
+
+type Phase = "attack" | "block";
 
 export class Game {
   private app = new Application();
   private board!: Board;
   private state = new BoardState(SLOT_COUNT);
   private lanes!: Record<RowKey, Lane>;
-  private endTurnButton!: HTMLButtonElement;
+  private actionButton!: HTMLButtonElement;
+  private statusEl!: HTMLDivElement;
   private logEl!: HTMLDivElement;
+
+  private activeSide: Side = "player";
+  private phase: Phase = "attack";
+  private selectedAttackers: AttackDeclaration[] = [];
+  private declaredAttackers: AttackDeclaration[] = [];
+  private declaredBlocks: BlockDeclaration[] = [];
+  private armedAttacker: AttackDeclaration | null = null;
+  private gameOver = false;
 
   async init(container: HTMLElement): Promise<void> {
     await this.app.init({
@@ -36,9 +55,11 @@ export class Game {
     this.populateDemoCards();
     this.updateHealthDisplay();
 
-    this.endTurnButton = document.querySelector<HTMLButtonElement>("#end-turn")!;
+    this.actionButton = document.querySelector<HTMLButtonElement>("#action-button")!;
+    this.statusEl = document.querySelector<HTMLDivElement>("#status")!;
     this.logEl = document.querySelector<HTMLDivElement>("#log")!;
-    this.endTurnButton.addEventListener("click", () => this.endTurn());
+
+    this.startAttackPhase("player");
 
     // `resizeTo` in Pixi only reacts to window resize events, not to layout
     // shifts of its own container (e.g. the HUD growing when log lines are
@@ -69,16 +90,130 @@ export class Game {
     this.placeCard("playerRanged", 1, robots[2]);
   }
 
-  private endTurn(): void {
-    const events = resolveCombatRound(this.state);
+  // ---- Fase di attacco ----
+
+  private startAttackPhase(side: Side): void {
+    if (this.gameOver) return;
+    this.activeSide = side;
+    this.phase = "attack";
+    this.selectedAttackers = [];
+    this.untapSide(side);
+
+    if (side === "player") {
+      this.statusEl.textContent = "Il tuo turno: scegli le carte che attaccano";
+      this.actionButton.textContent = "Dichiara attacco";
+      this.actionButton.disabled = false;
+      this.actionButton.onclick = () => this.confirmPlayerAttackers();
+      this.refreshBoardInteractivity();
+    } else {
+      this.statusEl.textContent = "Il nemico attacca...";
+      const attackers = aiChooseAttackers(this.state, "opponent");
+      this.beginBlockPhase("opponent", attackers);
+    }
+  }
+
+  private confirmPlayerAttackers(): void {
+    this.beginBlockPhase("player", [...this.selectedAttackers]);
+  }
+
+  private toggleSelectedAttacker(row: RowKey, slot: number): void {
+    const idx = this.selectedAttackers.findIndex((a) => a.row === row && a.slot === slot);
+    if (idx >= 0) this.selectedAttackers.splice(idx, 1);
+    else this.selectedAttackers.push({ row, slot });
+    this.refreshBoardInteractivity();
+  }
+
+  private untapSide(side: Side): void {
+    for (const row of lanesOfSide(side)) {
+      for (let slot = 0; slot < this.state.slotCount; slot++) {
+        const card = this.state.getCard(row, slot);
+        if (card) card.tapped = false;
+      }
+    }
+  }
+
+  // ---- Fase di blocco ----
+
+  private beginBlockPhase(attackingSide: Side, attackers: AttackDeclaration[]): void {
+    this.phase = "block";
+    this.declaredAttackers = attackers;
+    this.declaredBlocks = [];
+    this.armedAttacker = null;
+    const defendingSide: Side = attackingSide === "player" ? "opponent" : "player";
+
+    if (defendingSide === "player") {
+      this.statusEl.textContent = "Il nemico attacca: scegli con chi bloccare";
+      this.actionButton.textContent = "Conferma blocchi";
+      this.actionButton.onclick = () => this.confirmBlocks(attackingSide);
+      this.refreshBoardInteractivity();
+      this.updateConfirmBlocksEnabled();
+    } else {
+      const blocks = aiChooseBlocks(this.state, "opponent", attackers);
+      this.resolveAndAdvance(attackingSide, attackers, blocks);
+    }
+  }
+
+  private armAttacker(ref: AttackDeclaration): void {
+    this.armedAttacker = ref;
+    this.refreshBoardInteractivity();
+  }
+
+  private assignBlocker(row: RowKey, slot: number): void {
+    if (!this.armedAttacker) return;
+    const armed = this.armedAttacker;
+    this.declaredBlocks = this.declaredBlocks.filter(
+      (b) =>
+        !(b.attackerRow === armed.row && b.attackerSlot === armed.slot) &&
+        !(b.blockerRow === row && b.blockerSlot === slot),
+    );
+    this.declaredBlocks.push({
+      attackerRow: armed.row,
+      attackerSlot: armed.slot,
+      blockerRow: row,
+      blockerSlot: slot,
+    });
+    this.armedAttacker = null;
+    this.refreshBoardInteractivity();
+    this.updateConfirmBlocksEnabled();
+  }
+
+  private unassignBlocker(row: RowKey, slot: number): void {
+    this.declaredBlocks = this.declaredBlocks.filter((b) => !(b.blockerRow === row && b.blockerSlot === slot));
+    this.refreshBoardInteractivity();
+    this.updateConfirmBlocksEnabled();
+  }
+
+  private confirmBlocks(attackingSide: Side): void {
+    this.resolveAndAdvance(attackingSide, this.declaredAttackers, this.declaredBlocks);
+  }
+
+  private updateConfirmBlocksEnabled(): void {
+    if (this.phase !== "block") return;
+    const defendingSide: Side = this.activeSide === "player" ? "opponent" : "player";
+    if (defendingSide !== "player") return;
+    this.actionButton.disabled = !guardObligationsSatisfied(
+      this.state,
+      "player",
+      lanesOfSide("player"),
+      this.declaredAttackers,
+      this.declaredBlocks,
+    );
+  }
+
+  // ---- Risoluzione ----
+
+  private resolveAndAdvance(attackingSide: Side, attackers: AttackDeclaration[], blocks: BlockDeclaration[]): void {
+    const events = resolveCombat(this.state, attackingSide, attackers, blocks);
     this.syncBoardView();
     this.updateHealthDisplay();
     this.logEvents(events);
-    this.checkGameOver();
+    if (this.checkGameOver()) return;
+    const nextSide: Side = attackingSide === "player" ? "opponent" : "player";
+    this.startAttackPhase(nextSide);
   }
 
   private syncBoardView(): void {
-    for (const row of ROW_KEYS) {
+    for (const row of Object.keys(this.lanes) as RowKey[]) {
       for (let slot = 0; slot < this.state.slotCount; slot++) {
         this.lanes[row].setCard(slot, this.state.getCard(row, slot));
       }
@@ -99,18 +234,79 @@ export class Game {
     this.logEl.scrollTop = this.logEl.scrollHeight;
   }
 
-  private checkGameOver(): void {
-    if (this.state.playerHealth <= 0 || this.state.opponentHealth <= 0) {
-      this.endTurnButton.disabled = true;
-      const line = document.createElement("p");
-      line.textContent =
-        this.state.playerHealth <= 0 && this.state.opponentHealth <= 0
-          ? "Pareggio!"
-          : this.state.opponentHealth <= 0
-            ? "Hai vinto!"
-            : "Hai perso!";
-      this.logEl.appendChild(line);
-      this.logEl.scrollTop = this.logEl.scrollHeight;
+  private checkGameOver(): boolean {
+    if (this.state.playerHealth > 0 && this.state.opponentHealth > 0) return false;
+
+    this.gameOver = true;
+    this.actionButton.disabled = true;
+    this.statusEl.textContent =
+      this.state.playerHealth <= 0 && this.state.opponentHealth <= 0
+        ? "Pareggio!"
+        : this.state.opponentHealth <= 0
+          ? "Hai vinto!"
+          : "Hai perso!";
+    for (const row of Object.keys(this.lanes) as RowKey[]) {
+      for (let slot = 0; slot < this.state.slotCount; slot++) {
+        this.lanes[row].setInteractive(slot, null);
+        this.lanes[row].setOutline(slot, null);
+      }
+    }
+    return true;
+  }
+
+  // ---- Interattività ----
+
+  private refreshBoardInteractivity(): void {
+    for (const row of Object.keys(this.lanes) as RowKey[]) {
+      for (let slot = 0; slot < this.state.slotCount; slot++) {
+        this.lanes[row].setInteractive(slot, null);
+        this.lanes[row].setOutline(slot, null);
+      }
+    }
+
+    if (this.phase === "attack" && this.activeSide === "player") {
+      for (const row of lanesOfSide("player")) {
+        for (let slot = 0; slot < this.state.slotCount; slot++) {
+          const card = this.state.getCard(row, slot);
+          if (!card || card.tapped) continue;
+          const isSelected = this.selectedAttackers.some((a) => a.row === row && a.slot === slot);
+          this.lanes[row].setOutline(slot, isSelected ? 0xffd54f : null);
+          this.lanes[row].setInteractive(slot, () => this.toggleSelectedAttacker(row, slot));
+        }
+      }
+      return;
+    }
+
+    if (this.phase === "block") {
+      const defendingSide: Side = this.activeSide === "player" ? "opponent" : "player";
+
+      for (const ref of this.declaredAttackers) {
+        const isArmed = this.armedAttacker?.row === ref.row && this.armedAttacker?.slot === ref.slot;
+        this.lanes[ref.row].setOutline(ref.slot, isArmed ? 0xff8a65 : 0xffd54f);
+      }
+
+      if (defendingSide !== "player") return;
+
+      for (const ref of this.declaredAttackers) {
+        this.lanes[ref.row].setInteractive(ref.slot, () => this.armAttacker(ref));
+      }
+
+      for (const row of lanesOfSide("player")) {
+        for (let slot = 0; slot < this.state.slotCount; slot++) {
+          const card = this.state.getCard(row, slot);
+          if (!card || card.tapped) continue;
+          const assignment = this.declaredBlocks.find((b) => b.blockerRow === row && b.blockerSlot === slot);
+          if (assignment) {
+            this.lanes[row].setOutline(slot, 0x66bb6a);
+            this.lanes[row].setInteractive(slot, () => this.unassignBlocker(row, slot));
+          } else if (
+            this.armedAttacker &&
+            canBlock(this.state, this.armedAttacker.row, this.armedAttacker.slot, row, slot)
+          ) {
+            this.lanes[row].setInteractive(slot, () => this.assignBlocker(row, slot));
+          }
+        }
+      }
     }
   }
 
