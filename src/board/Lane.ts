@@ -85,6 +85,17 @@ export class Lane extends Container {
     this.cardViews[slot]?.setDeathMarker(active);
   }
 
+  getCardView(slot: number): CardView | undefined {
+    return this.cardViews[slot];
+  }
+
+  /** Centro dello slot in coordinate globali (stage), utile per animazioni che attraversano container diversi. */
+  getSlotGlobalCenter(slot: number): { x: number; y: number } {
+    const local = { x: slot * (CARD_WIDTH + SLOT_GAP) + CARD_WIDTH / 2, y: CARD_HEIGHT / 2 };
+    const point = this.toGlobal(local);
+    return { x: point.x, y: point.y };
+  }
+
   /** Evidenzia uno slot vuoto come bersaglio valido per il piazzamento di una carta dalla mano. */
   setPlaceholderHighlight(slot: number, color: number | null): void {
     const placeholder = this.placeholders[slot];

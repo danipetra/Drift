@@ -17,7 +17,8 @@ import {
   type CombatEvent,
 } from "../game/combat";
 import { Deck } from "../game/Deck";
-import { HandView } from "../hand/HandView";
+import { HandView, HAND_SCALE } from "../hand/HandView";
+import { dealCardFlight, fadeOut, lungeToward, popDamageNumber, rangedRecoil, shake, travelStreak } from "../render/animations";
 import { preloadCardTextures } from "../render/cardAssets";
 import { CARD_HEIGHT, CARD_WIDTH, CardView } from "../render/CardView";
 import type { CardData } from "../types/card";
@@ -42,6 +43,8 @@ export class Game {
   private armedRangedAttacker: { row: RowKey; slot: number } | null = null;
   private armedHandIndex: number | null = null;
   private gameOver = false;
+  /** Vero mentre un replay animato (combattimento o piazzamento) è in corso: blocca i click, non il long-press. */
+  private isReplaying = false;
 
   private playerDeck = new Deck(playerDeckIds as string[]);
   private enemyDeck = new Deck(enemyDeckIds as string[]);
@@ -55,7 +58,7 @@ export class Game {
   private enemyTurnsTaken = 0;
   private manaEl!: HTMLDivElement;
 
-  private previewContainer = new Container();
+  private overlayContainer = new Container();
   /** Carta "fissata" in anteprima (es. armata dalla mano): resta visibile finché non si cambia stato. */
   private pinnedPreview: { card: CardInstance; side: Side } | null = null;
 
@@ -79,7 +82,7 @@ export class Game {
     this.populateDemoCards();
     this.updateHealthDisplay();
     this.app.stage.addChild(this.handView);
-    this.app.stage.addChild(this.previewContainer);
+    this.app.stage.addChild(this.overlayContainer);
 
     this.actionButton = document.querySelector<HTMLButtonElement>("#action-button")!;
     this.backButton = document.querySelector<HTMLButtonElement>("#back-button")!;
@@ -96,7 +99,7 @@ export class Game {
       this.drawEnemyCard();
     }
 
-    this.startAttackPhase("player");
+    await this.startAttackPhase("player");
 
     // `resizeTo` in Pixi only reacts to window resize events, not to layout
     // shifts of its own container (e.g. the HUD growing when log lines are
@@ -153,7 +156,7 @@ export class Game {
 
   // ---- Turno ----
 
-  private startAttackPhase(side: Side): void {
+  private async startAttackPhase(side: Side): Promise<void> {
     if (this.gameOver) return;
     this.activeSide = side;
     this.selectedAttackers = [];
@@ -181,13 +184,20 @@ export class Game {
       this.enemyMana = this.enemyTurnsTaken - 1;
       this.drawEnemyCard();
       aiReinforce(this.state, "opponent");
+      this.syncBoardView(); // riflette subito il rinforzo (non animato: fuori scope per ora)
+
       const { remainingMana, played } = aiPlayCards(this.state, "opponent", this.enemyHand, this.enemyMana);
       this.enemyMana = remainingMana;
-      for (const card of played) this.appendLog(`Il nemico gioca ${card.data.name}`);
+      for (const { card, row, slot } of played) {
+        const dest = this.lanes[row].getSlotGlobalCenter(slot);
+        const dropHeight = CARD_HEIGHT * this.board.scale.x + 40;
+        await this.dealCardToSlot(card, row, slot, { x: dest.x, y: dest.y - dropHeight, scale: this.board.scale.x });
+        this.appendLog(`Il nemico gioca ${card.data.name}`);
+      }
 
       const attacks = aiChooseAttackers(this.state, "opponent");
       this.statusEl.textContent = "Il nemico attacca...";
-      this.resolveAndAdvance("opponent", attacks);
+      await this.resolveAndAdvance("opponent", attacks);
     }
   }
 
@@ -200,7 +210,7 @@ export class Game {
   }
 
   private confirmPlayerAttackers(): void {
-    this.resolveAndAdvance("player", [...this.selectedAttackers]);
+    void this.resolveAndAdvance("player", [...this.selectedAttackers]);
   }
 
   private toggleMeleeAttacker(row: RowKey, slot: number): void {
@@ -258,23 +268,54 @@ export class Game {
         : "Scegli uno slot libero per giocare la carta";
   }
 
-  private placeHandCard(row: RowKey, slot: number): void {
+  private async placeHandCard(row: RowKey, slot: number): Promise<void> {
     if (this.armedHandIndex === null) return;
     const instance = this.playerHand[this.armedHandIndex];
     if (!instance || instance.cost > this.playerMana) return;
+
+    const source = this.handView.getCardGlobalCenter(this.armedHandIndex);
 
     this.playerHand.splice(this.armedHandIndex, 1);
     this.playerMana -= instance.cost;
     // Appena giocata: non può ancora attaccare, come una carta tappata.
     instance.tapped = true;
-    this.state.setCard(row, slot, instance);
-    this.lanes[row].setCard(slot, instance);
     this.armedHandIndex = null;
     this.pinnedPreview = null;
     this.hideCardPreview();
     this.updateHandDisplay();
     this.updateManaDisplay();
+    this.isReplaying = true;
     this.refreshBoardInteractivity();
+
+    if (source) {
+      await this.dealCardToSlot(instance, row, slot, { ...source, scale: HAND_SCALE });
+    } else {
+      this.state.setCard(row, slot, instance);
+      this.lanes[row].setCard(slot, instance);
+    }
+
+    this.isReplaying = false;
+    this.refreshBoardInteractivity();
+  }
+
+  /** Anima una carta "in volo" da `source` (posizione/scala globali) fino allo slot, poi la posiziona a riposo. */
+  private async dealCardToSlot(
+    instance: CardInstance,
+    row: RowKey,
+    slot: number,
+    source: { x: number; y: number; scale: number },
+  ): Promise<void> {
+    const dest = this.lanes[row].getSlotGlobalCenter(slot);
+    const flying = new CardView(instance);
+    flying.pivot.set(CARD_WIDTH / 2, CARD_HEIGHT / 2);
+    this.overlayContainer.addChild(flying);
+
+    await dealCardFlight(flying, source, { x: dest.x, y: dest.y, scale: this.board.scale.x });
+
+    this.overlayContainer.removeChild(flying);
+    flying.destroy();
+    this.state.setCard(row, slot, instance);
+    this.lanes[row].setCard(slot, instance);
   }
 
   private moveReserveForward(meleeRow: RowKey, slot: number): void {
@@ -301,14 +342,73 @@ export class Game {
 
   // ---- Risoluzione ----
 
-  private resolveAndAdvance(attackingSide: Side, attacks: AttackDeclaration[]): void {
+  private async resolveAndAdvance(attackingSide: Side, attacks: AttackDeclaration[]): Promise<void> {
+    this.isReplaying = true;
+    this.actionButton.disabled = true;
+    this.refreshBoardInteractivity(); // pulisce le azioni di click, il long-press resta attivo
+
     const events = resolveCombat(this.state, attackingSide, attacks);
+    await this.playCombatReplay(events);
+
+    this.isReplaying = false;
     this.syncBoardView();
     this.updateHealthDisplay();
-    this.logEvents(events);
     if (this.checkGameOver()) return;
     const nextSide: Side = attackingSide === "player" ? "opponent" : "player";
-    this.startAttackPhase(nextSide);
+    await this.startAttackPhase(nextSide);
+  }
+
+  /** Rigioca gli eventi di combattimento in ordine, con animazione, aggiungendoli al log man mano. */
+  private async playCombatReplay(events: CombatEvent[]): Promise<void> {
+    for (const event of events) {
+      await this.playCombatEvent(event);
+      this.appendLog(event.message);
+    }
+  }
+
+  private async playCombatEvent(event: CombatEvent): Promise<void> {
+    switch (event.type) {
+      case "attack": {
+        if (!event.from || !event.to) return;
+        const fromView = this.lanes[event.from.row].getCardView(event.from.slot);
+        const toView = this.lanes[event.to.row].getCardView(event.to.slot);
+        if (!fromView || !toView) return;
+        const fromCenter = this.lanes[event.from.row].getSlotGlobalCenter(event.from.slot);
+        const toCenter = this.lanes[event.to.row].getSlotGlobalCenter(event.to.slot);
+
+        if (event.kind === "ranged") {
+          const dx = Math.sign(toCenter.x - fromCenter.x || 1) * 10;
+          await Promise.all([
+            rangedRecoil(fromView, dx),
+            travelStreak(this.overlayContainer, fromCenter, toCenter, 0xff8a65).then(() => shake(toView)),
+          ]);
+        } else {
+          const dx = (toCenter.x - fromCenter.x) * 0.18;
+          const dy = (toCenter.y - fromCenter.y) * 0.18;
+          await Promise.all([lungeToward(fromView, dx, dy), this.delay(60).then(() => shake(toView))]);
+        }
+
+        if (event.amount) void popDamageNumber(this.overlayContainer, toCenter.x, toCenter.y - 30, event.amount);
+        break;
+      }
+      case "death": {
+        if (!event.to) return;
+        const view = this.lanes[event.to.row].getCardView(event.to.slot);
+        if (view) await fadeOut(view);
+        break;
+      }
+      case "face-damage": {
+        if (!event.face) return;
+        const center = this.board.getHealthGlobalCenter(event.face);
+        await this.board.punchHealth(event.face);
+        if (event.amount) void popDamageNumber(this.overlayContainer, center.x, center.y - 24, event.amount);
+        break;
+      }
+    }
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   private syncBoardView(): void {
@@ -329,10 +429,6 @@ export class Game {
     line.textContent = message;
     this.logEl.appendChild(line);
     this.logEl.scrollTop = this.logEl.scrollHeight;
-  }
-
-  private logEvents(events: CombatEvent[]): void {
-    for (const event of events) this.appendLog(event.message);
   }
 
   private checkGameOver(): boolean {
@@ -392,7 +488,7 @@ export class Game {
   }
 
   private showCardPreview(card: CardInstance, side: Side): void {
-    this.previewContainer.removeChildren();
+    this.overlayContainer.removeChildren();
 
     const scale = 1.8;
     const width = CARD_WIDTH * scale;
@@ -414,12 +510,12 @@ export class Game {
       Math.max(margin, (this.app.screen.height - height - 20) / 2),
     );
 
-    this.previewContainer.addChild(wrapper);
+    this.overlayContainer.addChild(wrapper);
   }
 
   /** Nasconde l'anteprima transitoria (long-press); se c'è una carta "fissata" (es. armata dalla mano), la ripristina. */
   private hideCardPreview(): void {
-    this.previewContainer.removeChildren();
+    this.overlayContainer.removeChildren();
     if (this.pinnedPreview) this.showCardPreview(this.pinnedPreview.card, this.pinnedPreview.side);
   }
 
@@ -440,6 +536,7 @@ export class Game {
       this.handView.setOutline(i, null);
     }
     this.targetFaceButton.style.display = "none";
+    this.backButton.style.display = "none";
 
     // L'anteprima a pressione prolungata resta sempre disponibile su ogni carta in campo e in mano.
     for (const row of Object.keys(this.lanes) as RowKey[]) {
@@ -451,7 +548,7 @@ export class Game {
       this.wireHandCard(i, null);
     }
 
-    if (this.gameOver || this.activeSide !== "player") return;
+    if (this.isReplaying || this.gameOver || this.activeSide !== "player") return;
 
     this.backButton.style.display = this.selectedAttackers.length > 0 ? "" : "none";
 

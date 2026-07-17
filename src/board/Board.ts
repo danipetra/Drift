@@ -1,4 +1,5 @@
 import { Container, Text } from "pixi.js";
+import { punchScale } from "../render/animations";
 import { Lane } from "./Lane";
 
 const LANE_GAP = 20;
@@ -71,6 +72,18 @@ export class Board extends Container {
   setPlayerHealth(value: number): void {
     this.playerHealthText.text = `Vita: ${value}`;
     this.playerHealthText.position.x = (this.boardWidth - this.playerHealthText.width) / 2;
+  }
+
+  /** Scossa/"punch" sul testo Vita colpito, per far sentire il colpo diretto. */
+  punchHealth(side: "player" | "opponent"): Promise<void> {
+    return punchScale(side === "player" ? this.playerHealthText : this.opponentHealthText);
+  }
+
+  /** Centro del testo Vita in coordinate globali (stage), per far comparire lì il numero di danno. */
+  getHealthGlobalCenter(side: "player" | "opponent"): { x: number; y: number } {
+    const text = side === "player" ? this.playerHealthText : this.opponentHealthText;
+    const point = text.toGlobal({ x: text.width / 2, y: text.height / 2 });
+    return { x: point.x, y: point.y };
   }
 
   get boardWidth(): number {

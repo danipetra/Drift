@@ -14,15 +14,23 @@ export function aiReinforce(state: BoardState, side: Side): void {
   }
 }
 
+export interface AiCardPlacement {
+  card: CardInstance;
+  row: RowKey;
+  slot: number;
+}
+
 export interface AiPlayResult {
   remainingMana: number;
-  played: CardInstance[];
+  played: AiCardPlacement[];
 }
 
 /**
- * IA elementare: gioca dalla mano le carte più economiche per prime, riempiendo
- * gli slot liberi (prima melee poi ranged) finché il mana lo consente. Muta sia
- * `state` che `hand`.
+ * IA elementare: sceglie dalla mano le carte più economiche per prime, decidendo
+ * in quali slot liberi (prima melee poi ranged) andrebbero, finché il mana lo
+ * consente. Muta `hand` (le carte scelte vengono rimosse), ma NON tocca `state`:
+ * il piazzamento vero e proprio (con eventuale animazione) spetta al chiamante,
+ * così può volare in campo invece di comparire di colpo.
  */
 export function aiPlayCards(state: BoardState, side: Side, hand: CardInstance[], mana: number): AiPlayResult {
   const [meleeRow, rangedRow] = lanesOfSide(side);
@@ -34,7 +42,7 @@ export function aiPlayCards(state: BoardState, side: Side, hand: CardInstance[],
   }
 
   let remainingMana = mana;
-  const played: CardInstance[] = [];
+  const played: AiCardPlacement[] = [];
   const cheapestFirst = [...hand].sort((a, b) => a.cost - b.cost);
 
   for (const card of cheapestFirst) {
@@ -43,9 +51,8 @@ export function aiPlayCards(state: BoardState, side: Side, hand: CardInstance[],
 
     const target = emptySlots.shift()!;
     card.tapped = true;
-    state.setCard(target.row, target.slot, card);
     remainingMana -= card.cost;
-    played.push(card);
+    played.push({ card, row: target.row, slot: target.slot });
 
     const handIndex = hand.indexOf(card);
     if (handIndex >= 0) hand.splice(handIndex, 1);

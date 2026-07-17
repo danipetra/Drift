@@ -11,9 +11,23 @@ export interface AttackDeclaration {
   target?: AttackTarget;
 }
 
+export interface CardRef {
+  row: RowKey;
+  slot: number;
+}
+
 export interface CombatEvent {
   type: "attack" | "death" | "face-damage";
   message: string;
+  /** Chi ha agito — assente solo per un "death" causato indirettamente (mai il caso oggi, ma resta opzionale). */
+  from?: CardRef;
+  /** Bersaglio carta colpita ("attack"/"death"); assente per "face-damage". */
+  to?: CardRef;
+  amount?: number;
+  /** Per "face-damage": quale lato ha subito il colpo. */
+  face?: Side;
+  /** Per "attack": che tipo di scatto animare. */
+  kind?: "melee" | "ranged";
 }
 
 /** Un bersaglio ranged dev'essere vivo e non protetto da Guardia. */
@@ -57,72 +71,101 @@ export function resolveCombat(state: BoardState, attackingSide: Side, attacks: A
   const [attackerMeleeRow, attackerRangedRow] = lanesOfSide(attackingSide);
   const [defenderMeleeRow] = lanesOfSide(defendingSide);
 
-  const dealFaceDamage = (attacker: CardInstance) => {
+  const dealFaceDamage = (attacker: CardInstance, attackerRef: CardRef) => {
     const amount = attacker.currentAttack;
     if (defendingSide === "player") state.playerHealth -= amount;
     else state.opponentHealth -= amount;
-    events.push({ type: "face-damage", message: `${attacker.data.name} colpisce direttamente per ${amount}` });
+    events.push({
+      type: "face-damage",
+      message: `${attacker.data.name} colpisce direttamente per ${amount}`,
+      from: attackerRef,
+      amount,
+      face: defendingSide,
+    });
   };
 
-  const strike = (from: CardInstance, to: CardInstance) => {
-    if (from.isDead || to.isDead) return;
-    const amount = from.currentAttack;
-    to.currentDefense -= amount;
-    if (from.hasModifier(Modifier.Deadly) && amount > 0) to.currentDefense = 0;
-    events.push({ type: "attack", message: `${from.data.name} infligge ${amount} a ${to.data.name}` });
+  interface Combatant {
+    card: CardInstance;
+    ref: CardRef;
+  }
+
+  const strike = (from: Combatant, to: Combatant, kind: "melee" | "ranged") => {
+    if (from.card.isDead || to.card.isDead) return;
+    const amount = from.card.currentAttack;
+    to.card.currentDefense -= amount;
+    if (from.card.hasModifier(Modifier.Deadly) && amount > 0) to.card.currentDefense = 0;
+    events.push({
+      type: "attack",
+      message: `${from.card.data.name} infligge ${amount} a ${to.card.data.name}`,
+      from: from.ref,
+      to: to.ref,
+      amount,
+      kind,
+    });
   };
 
-  const strikeSimultaneously = (pairs: { from: CardInstance; to: CardInstance }[]) => {
+  const strikeSimultaneously = (pairs: { from: Combatant; to: Combatant; kind: "melee" | "ranged" }[]) => {
     const prepared = pairs
-      .filter((p) => !p.from.isDead && !p.to.isDead)
-      .map((p) => ({ from: p.from, to: p.to, amount: p.from.currentAttack }));
+      .filter((p) => !p.from.card.isDead && !p.to.card.isDead)
+      .map((p) => ({ ...p, amount: p.from.card.currentAttack }));
     for (const p of prepared) {
-      p.to.currentDefense -= p.amount;
-      if (p.from.hasModifier(Modifier.Deadly) && p.amount > 0) p.to.currentDefense = 0;
-      events.push({ type: "attack", message: `${p.from.data.name} infligge ${p.amount} a ${p.to.data.name}` });
+      p.to.card.currentDefense -= p.amount;
+      if (p.from.card.hasModifier(Modifier.Deadly) && p.amount > 0) p.to.card.currentDefense = 0;
+      events.push({
+        type: "attack",
+        message: `${p.from.card.data.name} infligge ${p.amount} a ${p.to.card.data.name}`,
+        from: p.from.ref,
+        to: p.to.ref,
+        amount: p.amount,
+        kind: p.kind,
+      });
     }
   };
 
   // ---- Melee: fisso per colonna, combattimento reciproco ----
   interface MeleeDuel {
-    attacker: CardInstance;
-    defender: CardInstance;
+    attacker: Combatant;
+    defender: Combatant;
   }
   const meleeDuels: MeleeDuel[] = [];
 
   for (const decl of attacks) {
     if (decl.row !== attackerMeleeRow) continue;
-    const attacker = state.getCard(decl.row, decl.slot);
-    if (!attacker) continue;
-    attacker.tapped = true;
+    const attackerCard = state.getCard(decl.row, decl.slot);
+    if (!attackerCard) continue;
+    attackerCard.tapped = true;
+    const attacker: Combatant = { card: attackerCard, ref: { row: decl.row, slot: decl.slot } };
 
-    const defender = state.getCard(defenderMeleeRow, decl.slot);
-    if (!defender || meleeColumnEvades(attacker, defender)) {
-      dealFaceDamage(attacker);
+    const defenderCard = state.getCard(defenderMeleeRow, decl.slot);
+    if (!defenderCard || meleeColumnEvades(attackerCard, defenderCard)) {
+      dealFaceDamage(attackerCard, attacker.ref);
     } else {
-      meleeDuels.push({ attacker, defender });
+      meleeDuels.push({
+        attacker,
+        defender: { card: defenderCard, ref: { row: defenderMeleeRow, slot: decl.slot } },
+      });
     }
   }
 
   strikeSimultaneously(
     meleeDuels
-      .filter((d) => d.attacker.hasModifier(Modifier.FirstStrike))
-      .map((d) => ({ from: d.attacker, to: d.defender }))
+      .filter((d) => d.attacker.card.hasModifier(Modifier.FirstStrike))
+      .map((d) => ({ from: d.attacker, to: d.defender, kind: "melee" as const }))
       .concat(
         meleeDuels
-          .filter((d) => d.defender.hasModifier(Modifier.FirstStrike))
-          .map((d) => ({ from: d.defender, to: d.attacker })),
+          .filter((d) => d.defender.card.hasModifier(Modifier.FirstStrike))
+          .map((d) => ({ from: d.defender, to: d.attacker, kind: "melee" as const })),
       ),
   );
 
   strikeSimultaneously(
     meleeDuels
-      .filter((d) => !d.attacker.hasModifier(Modifier.FirstStrike))
-      .map((d) => ({ from: d.attacker, to: d.defender }))
+      .filter((d) => !d.attacker.card.hasModifier(Modifier.FirstStrike))
+      .map((d) => ({ from: d.attacker, to: d.defender, kind: "melee" as const }))
       .concat(
         meleeDuels
-          .filter((d) => !d.defender.hasModifier(Modifier.FirstStrike))
-          .map((d) => ({ from: d.defender, to: d.attacker })),
+          .filter((d) => !d.defender.card.hasModifier(Modifier.FirstStrike))
+          .map((d) => ({ from: d.defender, to: d.attacker, kind: "melee" as const })),
       ),
   );
 
@@ -131,18 +174,19 @@ export function resolveCombat(state: BoardState, attackingSide: Side, attacks: A
   // ---- Ranged: bersaglio libero, danno a senso unico (nessun contrattacco) ----
   for (const decl of attacks) {
     if (decl.row !== attackerRangedRow) continue;
-    const attacker = state.getCard(decl.row, decl.slot);
-    if (!attacker || attacker.isDead) continue;
-    attacker.tapped = true;
+    const attackerCard = state.getCard(decl.row, decl.slot);
+    if (!attackerCard || attackerCard.isDead) continue;
+    attackerCard.tapped = true;
+    const attacker: Combatant = { card: attackerCard, ref: { row: decl.row, slot: decl.slot } };
 
     if (!decl.target || decl.target.type === "face") {
-      dealFaceDamage(attacker);
+      dealFaceDamage(attackerCard, attacker.ref);
       continue;
     }
 
-    const target = state.getCard(decl.target.row, decl.target.slot);
-    if (!target || target.isDead) continue; // bersaglio già eliminato, colpo sprecato
-    strike(attacker, target);
+    const targetCard = state.getCard(decl.target.row, decl.target.slot);
+    if (!targetCard || targetCard.isDead) continue; // bersaglio già eliminato, colpo sprecato
+    strike(attacker, { card: targetCard, ref: { row: decl.target.row, slot: decl.target.slot } }, "ranged");
   }
 
   removeDeadCards(state, events);
@@ -155,7 +199,7 @@ function removeDeadCards(state: BoardState, events: CombatEvent[]): void {
     for (let slot = 0; slot < state.slotCount; slot++) {
       const card = state.getCard(row, slot);
       if (card?.isDead) {
-        events.push({ type: "death", message: `${card.data.name} muore` });
+        events.push({ type: "death", message: `${card.data.name} muore`, to: { row, slot } });
         state.setCard(row, slot, undefined);
       }
     }

@@ -44,4 +44,12 @@ export class HandView extends Container {
   ): void {
     this.cardViews[index]?.setInteractive(onClick, onLongPress, onLongPressEnd);
   }
+
+  /** Centro della carta in coordinate globali (stage), per far partire da lì l'animazione di piazzamento. */
+  getCardGlobalCenter(index: number): { x: number; y: number } | undefined {
+    const view = this.cardViews[index];
+    if (!view) return undefined;
+    const point = view.toGlobal({ x: CARD_WIDTH / 2, y: CARD_HEIGHT / 2 });
+    return { x: point.x, y: point.y };
+  }
 }
