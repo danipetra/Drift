@@ -16,6 +16,7 @@ import {
 } from "../game/combat";
 import { Deck } from "../game/Deck";
 import { HandView } from "../hand/HandView";
+import { preloadCardTextures } from "../render/cardAssets";
 import { CARD_HEIGHT, CARD_WIDTH, CardView } from "../render/CardView";
 import type { CardData } from "../types/card";
 
@@ -61,6 +62,7 @@ export class Game {
       antialias: true,
     });
     container.appendChild(this.app.canvas);
+    await preloadCardTextures();
 
     this.board = new Board(SLOT_COUNT);
     this.app.stage.addChild(this.board);

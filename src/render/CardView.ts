@@ -1,10 +1,13 @@
-import { Container, Graphics, Text } from "pixi.js";
+import { Container, Graphics, Sprite, Text, Texture } from "pixi.js";
 import { MODIFIER_LABELS } from "../types/card";
 import type { CardInstance } from "../game/CardInstance";
+import { getCardArt, getCardFrame } from "./cardAssets";
 import { FRAME_STYLES } from "./frames";
 
 export const CARD_WIDTH = 140;
 export const CARD_HEIGHT = 200;
+/** Rettangolo riservato all'illustrazione centrale, nelle stesse unità della carta (base 140×200). */
+export const ART_WINDOW = { x: 8, y: 58, width: 124, height: 86 };
 const LONG_PRESS_MS = 450;
 
 export class CardView extends Container {
@@ -19,11 +22,28 @@ export class CardView extends Container {
 
     const style = FRAME_STYLES[data.type];
 
-    const frame = new Graphics()
-      .roundRect(0, 0, CARD_WIDTH, CARD_HEIGHT, 10)
-      .fill(style.fill)
-      .stroke({ width: 3, color: style.stroke });
-    this.addChild(frame);
+    const artPath = getCardArt(data.id);
+    if (artPath) {
+      const art = new Sprite(Texture.from(artPath));
+      art.position.set(ART_WINDOW.x, ART_WINDOW.y);
+      art.width = ART_WINDOW.width;
+      art.height = ART_WINDOW.height;
+      this.addChild(art);
+    }
+
+    const framePath = getCardFrame(data.type);
+    if (framePath) {
+      const frame = new Sprite(Texture.from(framePath));
+      frame.width = CARD_WIDTH;
+      frame.height = CARD_HEIGHT;
+      this.addChild(frame);
+    } else {
+      const frame = new Graphics()
+        .roundRect(0, 0, CARD_WIDTH, CARD_HEIGHT, 10)
+        .fill(style.fill)
+        .stroke({ width: 3, color: style.stroke });
+      this.addChild(frame);
+    }
 
     const typeLabel = new Text({
       text: style.label,
