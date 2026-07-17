@@ -1,5 +1,5 @@
 import { Modifier } from "../types/card";
-import { lanesOfSide, ROW_KEYS, type BoardState, type RowKey, type Side } from "./BoardState";
+import { lanesOfSide, ROW_KEYS, sideOf, type BoardState, type RowKey, type Side } from "./BoardState";
 import type { CardInstance } from "./CardInstance";
 
 export type AttackTarget = { type: "face" } | { type: "card"; row: RowKey; slot: number };
@@ -26,6 +26,29 @@ function meleeColumnEvades(attacker: CardInstance, defender: CardInstance | unde
   if (attacker.hasModifier(Modifier.Stealth)) return true;
   if (attacker.hasModifier(Modifier.Flying) && !defender?.hasModifier(Modifier.Flying)) return true;
   return false;
+}
+
+/** Il danno di `attacker` basterebbe da solo a eliminare `target` (Tocco letale conta come letale a prescindere dal numero). */
+export function wouldKill(attacker: CardInstance, target: CardInstance): boolean {
+  if (attacker.hasModifier(Modifier.Deadly) && attacker.currentAttack > 0) return true;
+  return attacker.currentAttack >= target.currentDefense;
+}
+
+/** Bersaglio automatico di un attaccante melee (stessa colonna), o `undefined` se la colonna è vuota o l'attacco la scavalca. */
+export function meleeTargetFor(
+  state: BoardState,
+  attackerRow: RowKey,
+  attackerSlot: number,
+): { row: RowKey; slot: number; card: CardInstance } | undefined {
+  const attacker = state.getCard(attackerRow, attackerSlot);
+  if (!attacker) return undefined;
+
+  const defenderSide: Side = sideOf(attackerRow) === "player" ? "opponent" : "player";
+  const [defenderMeleeRow] = lanesOfSide(defenderSide);
+
+  const defender = state.getCard(defenderMeleeRow, attackerSlot);
+  if (!defender || meleeColumnEvades(attacker, defender)) return undefined;
+  return { row: defenderMeleeRow, slot: attackerSlot, card: defender };
 }
 
 export function resolveCombat(state: BoardState, attackingSide: Side, attacks: AttackDeclaration[]): CombatEvent[] {

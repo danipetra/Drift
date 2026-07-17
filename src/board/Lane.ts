@@ -81,6 +81,10 @@ export class Lane extends Container {
     this.cardViews[slot]?.setTapped(tapped);
   }
 
+  setDeathMarker(slot: number, active: boolean): void {
+    this.cardViews[slot]?.setDeathMarker(active);
+  }
+
   /** Evidenzia uno slot vuoto come bersaglio valido per il piazzamento di una carta dalla mano. */
   setPlaceholderHighlight(slot: number, color: number | null): void {
     const placeholder = this.placeholders[slot];

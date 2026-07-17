@@ -9,7 +9,9 @@ import { BoardState, laneRoleOf, lanesOfSide, sideOf, type RowKey, type Side } f
 import { CardInstance } from "../game/CardInstance";
 import {
   canTargetWithRanged,
+  meleeTargetFor,
   resolveCombat,
+  wouldKill,
   type AttackDeclaration,
   type AttackTarget,
   type CombatEvent,
@@ -39,7 +41,6 @@ export class Game {
   private selectedAttackers: AttackDeclaration[] = [];
   private armedRangedAttacker: { row: RowKey; slot: number } | null = null;
   private armedHandIndex: number | null = null;
-  private confirmingAttack = false;
   private gameOver = false;
 
   private playerDeck = new Deck(playerDeckIds as string[]);
@@ -55,6 +56,8 @@ export class Game {
   private manaEl!: HTMLDivElement;
 
   private previewContainer = new Container();
+  /** Carta "fissata" in anteprima (es. armata dalla mano): resta visibile finché non si cambia stato. */
+  private pinnedPreview: { card: CardInstance; side: Side } | null = null;
 
   async init(container: HTMLElement): Promise<void> {
     await this.app.init({
@@ -155,24 +158,27 @@ export class Game {
     this.activeSide = side;
     this.selectedAttackers = [];
     this.armedRangedAttacker = null;
-    this.confirmingAttack = false;
     this.backButton.style.display = "none";
     this.targetFaceButton.style.display = "none";
     this.untapSide(side);
 
     if (side === "player") {
-      if (this.playerTurnsTaken > 0) this.playerMana++;
       this.playerTurnsTaken++;
+      // Il mana riparte sempre dal conteggio dei turni, non da quanto è
+      // avanzato dopo aver speso: spendere questo turno non "abbassa" la
+      // crescita dei turni successivi.
+      this.playerMana = this.playerTurnsTaken - 1;
       this.updateManaDisplay();
       this.drawPlayerCard();
       this.statusEl.textContent = "Il tuo turno: scegli le carte che attaccano";
-      this.actionButton.textContent = "Dichiara attacco";
+      this.actionButton.textContent = "Attacca";
       this.actionButton.disabled = false;
-      this.actionButton.onclick = () => this.beginAttackConfirmation();
+      this.actionButton.onclick = () => this.confirmPlayerAttackers();
+      this.backButton.onclick = () => this.cancelSelection();
       this.refreshBoardInteractivity();
     } else {
-      if (this.enemyTurnsTaken > 0) this.enemyMana++;
       this.enemyTurnsTaken++;
+      this.enemyMana = this.enemyTurnsTaken - 1;
       this.drawEnemyCard();
       aiReinforce(this.state, "opponent");
       const { remainingMana, played } = aiPlayCards(this.state, "opponent", this.enemyHand, this.enemyMana);
@@ -185,33 +191,15 @@ export class Game {
     }
   }
 
-  private beginAttackConfirmation(): void {
-    this.confirmingAttack = true;
-    this.refreshBoardInteractivity();
-
-    const count = this.selectedAttackers.length;
-    this.statusEl.textContent =
-      count === 0
-        ? "Confermi di non attaccare questo turno?"
-        : `Confermi l'attacco con ${count} cart${count === 1 ? "a" : "e"}?`;
-    this.actionButton.textContent = "Conferma attacco";
-    this.actionButton.onclick = () => this.confirmPlayerAttackers();
-    this.backButton.style.display = "";
-    this.backButton.onclick = () => this.cancelAttackConfirmation();
-  }
-
-  private cancelAttackConfirmation(): void {
-    this.confirmingAttack = false;
-    this.backButton.style.display = "none";
+  /** "Annulla": pulisce la selezione corrente senza toccare carte già piazzate/tappate questo turno. */
+  private cancelSelection(): void {
+    this.selectedAttackers = [];
+    this.armedRangedAttacker = null;
     this.statusEl.textContent = "Il tuo turno: scegli le carte che attaccano";
-    this.actionButton.textContent = "Dichiara attacco";
-    this.actionButton.onclick = () => this.beginAttackConfirmation();
     this.refreshBoardInteractivity();
   }
 
   private confirmPlayerAttackers(): void {
-    this.confirmingAttack = false;
-    this.backButton.style.display = "none";
     this.resolveAndAdvance("player", [...this.selectedAttackers]);
   }
 
@@ -255,6 +243,14 @@ export class Game {
     this.refreshBoardInteractivity();
 
     const armedCard = this.armedHandIndex !== null ? this.playerHand[this.armedHandIndex] : undefined;
+    if (armedCard) {
+      this.pinnedPreview = { card: armedCard, side: "player" };
+      this.showCardPreview(armedCard, "player");
+    } else {
+      this.pinnedPreview = null;
+      this.hideCardPreview();
+    }
+
     this.statusEl.textContent = !armedCard
       ? "Il tuo turno: scegli le carte che attaccano"
       : armedCard.cost > this.playerMana
@@ -274,6 +270,8 @@ export class Game {
     this.state.setCard(row, slot, instance);
     this.lanes[row].setCard(slot, instance);
     this.armedHandIndex = null;
+    this.pinnedPreview = null;
+    this.hideCardPreview();
     this.updateHandDisplay();
     this.updateManaDisplay();
     this.refreshBoardInteractivity();
@@ -394,7 +392,7 @@ export class Game {
   }
 
   private showCardPreview(card: CardInstance, side: Side): void {
-    this.hideCardPreview();
+    this.previewContainer.removeChildren();
 
     const scale = 1.8;
     const width = CARD_WIDTH * scale;
@@ -419,8 +417,10 @@ export class Game {
     this.previewContainer.addChild(wrapper);
   }
 
+  /** Nasconde l'anteprima transitoria (long-press); se c'è una carta "fissata" (es. armata dalla mano), la ripristina. */
   private hideCardPreview(): void {
     this.previewContainer.removeChildren();
+    if (this.pinnedPreview) this.showCardPreview(this.pinnedPreview.card, this.pinnedPreview.side);
   }
 
   // ---- Interattività ----
@@ -432,6 +432,7 @@ export class Game {
         this.lanes[row].setOutline(slot, null);
         this.lanes[row].setPlaceholderInteractive(slot, null);
         this.lanes[row].setPlaceholderHighlight(slot, null);
+        this.lanes[row].setDeathMarker(slot, false);
       }
     }
     for (let i = 0; i < this.playerHand.length; i++) {
@@ -451,7 +452,8 @@ export class Game {
     }
 
     if (this.gameOver || this.activeSide !== "player") return;
-    if (this.confirmingAttack) return; // nessuna modifica ammessa in fase di conferma
+
+    this.backButton.style.display = this.selectedAttackers.length > 0 ? "" : "none";
 
     // Mostra comunque le carte già selezionate, anche mentre si sceglie un bersaglio ranged.
     for (const a of this.selectedAttackers) {
@@ -459,6 +461,7 @@ export class Game {
     }
 
     if (this.armedRangedAttacker) {
+      const armedCard = this.state.getCard(this.armedRangedAttacker.row, this.armedRangedAttacker.slot);
       this.actionButton.disabled = true;
       const armed = this.armedRangedAttacker;
       this.lanes[armed.row].setOutline(armed.slot, 0xff8a65);
@@ -469,6 +472,8 @@ export class Game {
           if (!canTargetWithRanged(this.state, row, slot)) continue;
           this.lanes[row].setOutline(slot, 0xff8a65);
           this.wireCard(row, slot, () => this.assignRangedTarget({ type: "card", row, slot }));
+          const target = this.state.getCard(row, slot);
+          if (armedCard && target) this.lanes[row].setDeathMarker(slot, wouldKill(armedCard, target));
         }
       }
 
@@ -489,6 +494,10 @@ export class Game {
           this.lanes[row].setOutline(slot, isSelected ? 0xffd54f : null);
           if (laneRoleOf(row) === "melee") {
             this.wireCard(row, slot, () => this.toggleMeleeAttacker(row, slot));
+            if (isSelected) {
+              const target = meleeTargetFor(this.state, row, slot);
+              if (target) this.lanes[target.row].setDeathMarker(target.slot, wouldKill(card, target.card));
+            }
           } else {
             this.wireCard(row, slot, () => this.armRangedAttacker(row, slot));
           }

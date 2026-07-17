@@ -13,6 +13,7 @@ const LONG_PRESS_MS = 450;
 export class CardView extends Container {
   readonly instance: CardInstance;
   private readonly outline: Graphics;
+  private readonly deathMarker: Container;
   private longPressTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(instance: CardInstance) {
@@ -115,11 +116,31 @@ export class CardView extends Container {
     this.outline = new Graphics();
     this.addChild(this.outline);
 
+    // Placeholder testuale: da rifare con un'icona quando ci saranno gli asset.
+    this.deathMarker = new Container();
+    this.deathMarker.visible = false;
+    const deathBackdrop = new Graphics()
+      .roundRect(0, CARD_HEIGHT / 2 - 22, CARD_WIDTH, 44, 6)
+      .fill({ color: 0x000000, alpha: 0.72 });
+    this.deathMarker.addChild(deathBackdrop);
+    const deathText = new Text({
+      text: "💀 KO",
+      style: { fontFamily: "sans-serif", fontSize: 20, fontWeight: "bold", fill: 0xff5252 },
+    });
+    deathText.anchor.set(0.5);
+    deathText.position.set(CARD_WIDTH / 2, CARD_HEIGHT / 2);
+    this.deathMarker.addChild(deathText);
+    this.addChild(this.deathMarker);
+
     this.setTapped(instance.tapped);
   }
 
   setTapped(tapped: boolean): void {
     this.alpha = tapped ? 0.45 : 1;
+  }
+
+  setDeathMarker(active: boolean): void {
+    this.deathMarker.visible = active;
   }
 
   setOutline(color: number | null): void {
