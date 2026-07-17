@@ -73,8 +73,8 @@ export class Lane extends Container {
     this.cardViews[slot]?.setOutline(color);
   }
 
-  setInteractive(slot: number, onClick: (() => void) | null): void {
-    this.cardViews[slot]?.setInteractive(onClick);
+  setInteractive(slot: number, onClick: (() => void) | null, onLongPress?: () => void, onLongPressEnd?: () => void): void {
+    this.cardViews[slot]?.setInteractive(onClick, onLongPress, onLongPressEnd);
   }
 
   setTapped(slot: number, tapped: boolean): void {

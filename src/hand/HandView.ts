@@ -36,7 +36,12 @@ export class HandView extends Container {
     this.cardViews[index]?.setOutline(color);
   }
 
-  setInteractive(index: number, onClick: (() => void) | null): void {
-    this.cardViews[index]?.setInteractive(onClick);
+  setInteractive(
+    index: number,
+    onClick: (() => void) | null,
+    onLongPress?: () => void,
+    onLongPressEnd?: () => void,
+  ): void {
+    this.cardViews[index]?.setInteractive(onClick, onLongPress, onLongPressEnd);
   }
 }

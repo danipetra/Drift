@@ -1,11 +1,11 @@
-import { Application } from "pixi.js";
+import { Application, Container, Graphics } from "pixi.js";
 import { Board } from "../board/Board";
 import { Lane } from "../board/Lane";
 import { getCardsByType } from "../data/cardLoader";
 import enemyDeckIds from "../data/decks/enemyDeck.json";
 import playerDeckIds from "../data/decks/playerDeck.json";
 import { aiChooseAttackers, aiReinforce } from "../game/ai";
-import { BoardState, laneRoleOf, lanesOfSide, type RowKey, type Side } from "../game/BoardState";
+import { BoardState, laneRoleOf, lanesOfSide, sideOf, type RowKey, type Side } from "../game/BoardState";
 import { CardInstance } from "../game/CardInstance";
 import {
   canTargetWithRanged,
@@ -16,6 +16,7 @@ import {
 } from "../game/combat";
 import { Deck } from "../game/Deck";
 import { HandView } from "../hand/HandView";
+import { CARD_HEIGHT, CARD_WIDTH, CardView } from "../render/CardView";
 import type { CardData } from "../types/card";
 
 const SLOT_COUNT = 4;
@@ -50,6 +51,8 @@ export class Game {
   private playerTurnsTaken = 0;
   private manaEl!: HTMLDivElement;
 
+  private previewContainer = new Container();
+
   async init(container: HTMLElement): Promise<void> {
     await this.app.init({
       background: "#101418",
@@ -69,6 +72,7 @@ export class Game {
     this.populateDemoCards();
     this.updateHealthDisplay();
     this.app.stage.addChild(this.handView);
+    this.app.stage.addChild(this.previewContainer);
 
     this.actionButton = document.querySelector<HTMLButtonElement>("#action-button")!;
     this.backButton = document.querySelector<HTMLButtonElement>("#back-button")!;
@@ -338,13 +342,71 @@ export class Game {
         this.lanes[row].setOutline(slot, null);
         this.lanes[row].setPlaceholderInteractive(slot, null);
         this.lanes[row].setPlaceholderHighlight(slot, null);
+        this.wireCard(row, slot, null); // l'anteprima resta consultabile anche a partita finita
       }
     }
     for (let i = 0; i < this.playerHand.length; i++) {
       this.handView.setInteractive(i, null);
       this.handView.setOutline(i, null);
+      this.wireHandCard(i, null); // l'anteprima resta consultabile anche a partita finita
     }
     return true;
+  }
+
+  // ---- Anteprima con pressione prolungata ----
+
+  /** Agancia il click di gioco (se presente) mantenendo sempre attiva l'anteprima a pressione prolungata. */
+  private wireCard(row: RowKey, slot: number, onClick: (() => void) | null): void {
+    const card = this.state.getCard(row, slot);
+    if (!card) return;
+    this.lanes[row].setInteractive(
+      slot,
+      onClick,
+      () => this.showCardPreview(card, sideOf(row)),
+      () => this.hideCardPreview(),
+    );
+  }
+
+  /** Come `wireCard`, ma per le carte in mano (sempre lato "player"). */
+  private wireHandCard(index: number, onClick: (() => void) | null): void {
+    const card = this.playerHand[index];
+    if (!card) return;
+    this.handView.setInteractive(
+      index,
+      onClick,
+      () => this.showCardPreview(card, "player"),
+      () => this.hideCardPreview(),
+    );
+  }
+
+  private showCardPreview(card: CardInstance, side: Side): void {
+    this.hideCardPreview();
+
+    const scale = 1.8;
+    const width = CARD_WIDTH * scale;
+    const height = CARD_HEIGHT * scale;
+    const wrapper = new Container();
+
+    const backdrop = new Graphics()
+      .roundRect(-10, -10, width + 20, height + 20, 16)
+      .fill({ color: 0x000000, alpha: 0.6 });
+    wrapper.addChild(backdrop);
+
+    const view = new CardView(card);
+    view.scale.set(scale);
+    wrapper.addChild(view);
+
+    const margin = 16;
+    wrapper.position.set(
+      side === "player" ? margin : this.app.screen.width - width - 20 - margin,
+      Math.max(margin, (this.app.screen.height - height - 20) / 2),
+    );
+
+    this.previewContainer.addChild(wrapper);
+  }
+
+  private hideCardPreview(): void {
+    this.previewContainer.removeChildren();
   }
 
   // ---- Interattività ----
@@ -364,6 +426,16 @@ export class Game {
     }
     this.targetFaceButton.style.display = "none";
 
+    // L'anteprima a pressione prolungata resta sempre disponibile su ogni carta in campo e in mano.
+    for (const row of Object.keys(this.lanes) as RowKey[]) {
+      for (let slot = 0; slot < this.state.slotCount; slot++) {
+        this.wireCard(row, slot, null);
+      }
+    }
+    for (let i = 0; i < this.playerHand.length; i++) {
+      this.wireHandCard(i, null);
+    }
+
     if (this.gameOver || this.activeSide !== "player") return;
     if (this.confirmingAttack) return; // nessuna modifica ammessa in fase di conferma
 
@@ -376,13 +448,13 @@ export class Game {
       this.actionButton.disabled = true;
       const armed = this.armedRangedAttacker;
       this.lanes[armed.row].setOutline(armed.slot, 0xff8a65);
-      this.lanes[armed.row].setInteractive(armed.slot, () => this.cancelRangedArm());
+      this.wireCard(armed.row, armed.slot, () => this.cancelRangedArm());
 
       for (const row of lanesOfSide("opponent")) {
         for (let slot = 0; slot < this.state.slotCount; slot++) {
           if (!canTargetWithRanged(this.state, row, slot)) continue;
           this.lanes[row].setOutline(slot, 0xff8a65);
-          this.lanes[row].setInteractive(slot, () => this.assignRangedTarget({ type: "card", row, slot }));
+          this.wireCard(row, slot, () => this.assignRangedTarget({ type: "card", row, slot }));
         }
       }
 
@@ -402,9 +474,9 @@ export class Game {
           const isSelected = this.selectedAttackers.some((a) => a.row === row && a.slot === slot);
           this.lanes[row].setOutline(slot, isSelected ? 0xffd54f : null);
           if (laneRoleOf(row) === "melee") {
-            this.lanes[row].setInteractive(slot, () => this.toggleMeleeAttacker(row, slot));
+            this.wireCard(row, slot, () => this.toggleMeleeAttacker(row, slot));
           } else {
-            this.lanes[row].setInteractive(slot, () => this.armRangedAttacker(row, slot));
+            this.wireCard(row, slot, () => this.armRangedAttacker(row, slot));
           }
         } else if (this.armedHandIndex !== null && this.playerHand[this.armedHandIndex].cost <= this.playerMana) {
           this.lanes[row].setPlaceholderHighlight(slot, 0x66bb6a);
@@ -420,7 +492,7 @@ export class Game {
       const isArmed = index === this.armedHandIndex;
       const isAffordable = card.cost <= this.playerMana;
       this.handView.setOutline(index, isArmed ? 0xffd54f : isAffordable ? 0x4fc3f7 : null);
-      this.handView.setInteractive(index, () => this.toggleArmedHandCard(index));
+      this.wireHandCard(index, () => this.toggleArmedHandCard(index));
     });
   }
 

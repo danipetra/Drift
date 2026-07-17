@@ -5,10 +5,12 @@ import { FRAME_STYLES } from "./frames";
 
 export const CARD_WIDTH = 140;
 export const CARD_HEIGHT = 200;
+const LONG_PRESS_MS = 450;
 
 export class CardView extends Container {
   readonly instance: CardInstance;
   private readonly outline: Graphics;
+  private longPressTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(instance: CardInstance) {
     super();
@@ -107,15 +109,61 @@ export class CardView extends Container {
     }
   }
 
-  setInteractive(onClick: (() => void) | null): void {
+  /**
+   * `onLongPress`/`onLongPressEnd` implementano un gesto di pressione prolungata
+   * (mostra/nascondi un'anteprima) senza far scattare anche `onClick` al rilascio:
+   * "pointertap" di Pixi non distingue tap brevi da pressioni lunghe, quindi qui
+   * il tap normale è reimplementato a mano su pointerdown/pointerup.
+   */
+  setInteractive(onClick: (() => void) | null, onLongPress?: () => void, onLongPressEnd?: () => void): void {
     this.removeAllListeners("pointertap");
-    if (onClick) {
-      this.eventMode = "static";
-      this.cursor = "pointer";
-      this.on("pointertap", onClick);
-    } else {
+    this.removeAllListeners("pointerdown");
+    this.removeAllListeners("pointerup");
+    this.removeAllListeners("pointerupoutside");
+    this.removeAllListeners("pointercancel");
+    this.clearLongPressTimer();
+
+    if (!onClick && !onLongPress) {
       this.eventMode = "none";
       this.cursor = "default";
+      return;
+    }
+
+    this.eventMode = "static";
+    this.cursor = "pointer";
+
+    if (!onLongPress) {
+      if (onClick) this.on("pointertap", onClick);
+      return;
+    }
+
+    let longPressFired = false;
+    const endLongPress = () => {
+      this.clearLongPressTimer();
+      if (longPressFired) onLongPressEnd?.();
+    };
+
+    this.on("pointerdown", () => {
+      longPressFired = false;
+      this.clearLongPressTimer();
+      this.longPressTimer = setTimeout(() => {
+        longPressFired = true;
+        onLongPress();
+      }, LONG_PRESS_MS);
+    });
+    this.on("pointerup", () => {
+      const wasLongPress = longPressFired;
+      endLongPress();
+      if (!wasLongPress) onClick?.();
+    });
+    this.on("pointerupoutside", endLongPress);
+    this.on("pointercancel", endLongPress);
+  }
+
+  private clearLongPressTimer(): void {
+    if (this.longPressTimer !== null) {
+      clearTimeout(this.longPressTimer);
+      this.longPressTimer = null;
     }
   }
 }
