@@ -31,6 +31,7 @@ export class Game {
   private state = new BoardState(SLOT_COUNT);
   private lanes!: Record<RowKey, Lane>;
   private actionButton!: HTMLButtonElement;
+  private backButton!: HTMLButtonElement;
   private statusEl!: HTMLDivElement;
   private logEl!: HTMLDivElement;
 
@@ -41,6 +42,7 @@ export class Game {
   private declaredBlocks: BlockDeclaration[] = [];
   private armedAttacker: AttackDeclaration | null = null;
   private armedHandIndex: number | null = null;
+  private confirmingAttack = false;
   private gameOver = false;
 
   private playerDeck = new Deck(playerDeckIds as string[]);
@@ -74,6 +76,7 @@ export class Game {
     this.app.stage.addChild(this.handView);
 
     this.actionButton = document.querySelector<HTMLButtonElement>("#action-button")!;
+    this.backButton = document.querySelector<HTMLButtonElement>("#back-button")!;
     this.statusEl = document.querySelector<HTMLDivElement>("#status")!;
     this.manaEl = document.querySelector<HTMLDivElement>("#mana")!;
     this.logEl = document.querySelector<HTMLDivElement>("#log")!;
@@ -146,6 +149,8 @@ export class Game {
     this.activeSide = side;
     this.phase = "attack";
     this.selectedAttackers = [];
+    this.confirmingAttack = false;
+    this.backButton.style.display = "none";
     this.untapSide(side);
 
     if (side === "player") {
@@ -156,7 +161,7 @@ export class Game {
       this.statusEl.textContent = "Il tuo turno: scegli le carte che attaccano";
       this.actionButton.textContent = "Dichiara attacco";
       this.actionButton.disabled = false;
-      this.actionButton.onclick = () => this.confirmPlayerAttackers();
+      this.actionButton.onclick = () => this.beginAttackConfirmation();
       this.refreshBoardInteractivity();
     } else {
       this.drawEnemyCard();
@@ -166,7 +171,33 @@ export class Game {
     }
   }
 
+  private beginAttackConfirmation(): void {
+    this.confirmingAttack = true;
+    this.refreshBoardInteractivity();
+
+    const count = this.selectedAttackers.length;
+    this.statusEl.textContent =
+      count === 0
+        ? "Confermi di non attaccare questo turno?"
+        : `Confermi l'attacco con ${count} cart${count === 1 ? "a" : "e"}?`;
+    this.actionButton.textContent = "Conferma attacco";
+    this.actionButton.onclick = () => this.confirmPlayerAttackers();
+    this.backButton.style.display = "";
+    this.backButton.onclick = () => this.cancelAttackConfirmation();
+  }
+
+  private cancelAttackConfirmation(): void {
+    this.confirmingAttack = false;
+    this.backButton.style.display = "none";
+    this.statusEl.textContent = "Il tuo turno: scegli le carte che attaccano";
+    this.actionButton.textContent = "Dichiara attacco";
+    this.actionButton.onclick = () => this.beginAttackConfirmation();
+    this.refreshBoardInteractivity();
+  }
+
   private confirmPlayerAttackers(): void {
+    this.confirmingAttack = false;
+    this.backButton.style.display = "none";
     this.beginBlockPhase("player", [...this.selectedAttackers]);
   }
 
@@ -334,6 +365,7 @@ export class Game {
 
     this.gameOver = true;
     this.actionButton.disabled = true;
+    this.backButton.style.display = "none";
     this.statusEl.textContent =
       this.state.playerHealth <= 0 && this.state.opponentHealth <= 0
         ? "Pareggio!"
@@ -372,6 +404,8 @@ export class Game {
     }
 
     if (this.phase === "attack" && this.activeSide === "player") {
+      if (this.confirmingAttack) return; // nessuna modifica ammessa in fase di conferma
+
       for (const row of lanesOfSide("player")) {
         for (let slot = 0; slot < this.state.slotCount; slot++) {
           const card = this.state.getCard(row, slot);
@@ -387,8 +421,10 @@ export class Game {
         }
       }
 
-      this.playerHand.forEach((_, index) => {
-        this.handView.setOutline(index, index === this.armedHandIndex ? 0xffd54f : null);
+      this.playerHand.forEach((card, index) => {
+        const isArmed = index === this.armedHandIndex;
+        const isAffordable = card.cost <= this.playerMana;
+        this.handView.setOutline(index, isArmed ? 0xffd54f : isAffordable ? 0x4fc3f7 : null);
         this.handView.setInteractive(index, () => this.toggleArmedHandCard(index));
       });
 
