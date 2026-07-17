@@ -49,6 +49,10 @@ export class Game {
   private enemyHandCount = 0;
   private handView = new HandView();
 
+  private playerMana = 0;
+  private playerTurnsTaken = 0;
+  private manaEl!: HTMLDivElement;
+
   async init(container: HTMLElement): Promise<void> {
     await this.app.init({
       background: "#101418",
@@ -71,6 +75,7 @@ export class Game {
 
     this.actionButton = document.querySelector<HTMLButtonElement>("#action-button")!;
     this.statusEl = document.querySelector<HTMLDivElement>("#status")!;
+    this.manaEl = document.querySelector<HTMLDivElement>("#mana")!;
     this.logEl = document.querySelector<HTMLDivElement>("#log")!;
 
     // `startAttackPhase` pesca automaticamente una carta a inizio turno: si
@@ -130,6 +135,10 @@ export class Game {
     this.handleResize();
   }
 
+  private updateManaDisplay(): void {
+    this.manaEl.textContent = `Mana: ${this.playerMana}`;
+  }
+
   // ---- Fase di attacco ----
 
   private startAttackPhase(side: Side): void {
@@ -140,6 +149,9 @@ export class Game {
     this.untapSide(side);
 
     if (side === "player") {
+      if (this.playerTurnsTaken > 0) this.playerMana++;
+      this.playerTurnsTaken++;
+      this.updateManaDisplay();
       this.drawPlayerCard();
       this.statusEl.textContent = "Il tuo turno: scegli le carte che attaccano";
       this.actionButton.textContent = "Dichiara attacco";
@@ -168,18 +180,29 @@ export class Game {
   private toggleArmedHandCard(index: number): void {
     this.armedHandIndex = this.armedHandIndex === index ? null : index;
     this.refreshBoardInteractivity();
+
+    const armedCard = this.armedHandIndex !== null ? this.playerHand[this.armedHandIndex] : undefined;
+    this.statusEl.textContent = !armedCard
+      ? "Il tuo turno: scegli le carte che attaccano"
+      : armedCard.cost > this.playerMana
+        ? `Mana insufficiente per ${armedCard.data.name} (costa ${armedCard.cost}, hai ${this.playerMana})`
+        : "Scegli uno slot libero per giocare la carta";
   }
 
   private placeHandCard(row: RowKey, slot: number): void {
     if (this.armedHandIndex === null) return;
-    const [instance] = this.playerHand.splice(this.armedHandIndex, 1);
-    if (!instance) return;
+    const instance = this.playerHand[this.armedHandIndex];
+    if (!instance || instance.cost > this.playerMana) return;
+
+    this.playerHand.splice(this.armedHandIndex, 1);
+    this.playerMana -= instance.cost;
     // Appena giocata: non può ancora attaccare né bloccare, come una carta tappata.
     instance.tapped = true;
     this.state.setCard(row, slot, instance);
     this.lanes[row].setCard(slot, instance);
     this.armedHandIndex = null;
     this.updateHandDisplay();
+    this.updateManaDisplay();
     this.refreshBoardInteractivity();
   }
 
@@ -357,7 +380,7 @@ export class Game {
             const isSelected = this.selectedAttackers.some((a) => a.row === row && a.slot === slot);
             this.lanes[row].setOutline(slot, isSelected ? 0xffd54f : null);
             this.lanes[row].setInteractive(slot, () => this.toggleSelectedAttacker(row, slot));
-          } else if (this.armedHandIndex !== null) {
+          } else if (this.armedHandIndex !== null && this.playerHand[this.armedHandIndex].cost <= this.playerMana) {
             this.lanes[row].setPlaceholderHighlight(slot, 0x66bb6a);
             this.lanes[row].setPlaceholderInteractive(slot, () => this.placeHandCard(row, slot));
           }

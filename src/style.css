@@ -49,10 +49,22 @@ body {
   gap: 12px;
 }
 
+#info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 #status {
   font-size: 13px;
   font-weight: bold;
   color: #d8d8d8;
+}
+
+#mana {
+  font-size: 12px;
+  font-weight: bold;
+  color: #ffe082;
 }
 
 #action-button {

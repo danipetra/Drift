@@ -30,6 +30,20 @@ export class CardView extends Container {
     typeLabel.position.set(8, 6);
     this.addChild(typeLabel);
 
+    const costBadge = new Graphics()
+      .circle(CARD_WIDTH - 16, 16, 13)
+      .fill({ color: 0x111318, alpha: 0.9 })
+      .stroke({ width: 2, color: 0xffe082 });
+    this.addChild(costBadge);
+
+    const costText = new Text({
+      text: String(instance.cost),
+      style: { fontFamily: "sans-serif", fontSize: 14, fontWeight: "bold", fill: 0xffe082 },
+    });
+    costText.anchor.set(0.5);
+    costText.position.set(CARD_WIDTH - 16, 16);
+    this.addChild(costText);
+
     const name = new Text({
       text: data.name,
       style: {
