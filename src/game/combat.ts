@@ -40,7 +40,6 @@ export function canBlock(
 /** Una carta Guardia disponibile e con almeno un bersaglio legale deve comparire tra i blocchi. */
 export function guardObligationsSatisfied(
   state: BoardState,
-  defendingSide: Side,
   defendingRows: RowKey[],
   attackers: AttackDeclaration[],
   blocks: BlockDeclaration[],
@@ -96,18 +95,42 @@ export function resolveCombat(
 
   const engaged = duels.filter((d): d is Duel & { blocker: CardInstance } => Boolean(d.blocker));
 
-  const strike = (from: CardInstance, to: CardInstance) => {
-    if (from.isDead || to.isDead) return;
-    const amount = from.currentAttack;
-    to.currentDefense -= amount;
-    if (from.hasModifier(Modifier.Deadly) && amount > 0) to.currentDefense = 0;
-    events.push({ type: "attack", message: `${from.data.name} infligge ${amount} a ${to.data.name}` });
+  // Il danno di ogni fase è simultaneo: si calcola l'ammontare per tutti i
+  // partecipanti ancora vivi PRIMA di applicarlo, così un difensore ucciso
+  // dall'attaccante infligge comunque il contraccolpo nella stessa fase
+  // (a meno che non fosse già morto in una fase precedente).
+  const strikeSimultaneously = (pairs: { from: CardInstance; to: CardInstance }[]) => {
+    const prepared = pairs
+      .filter((p) => !p.from.isDead && !p.to.isDead)
+      .map((p) => ({ from: p.from, to: p.to, amount: p.from.currentAttack }));
+    for (const p of prepared) {
+      p.to.currentDefense -= p.amount;
+      if (p.from.hasModifier(Modifier.Deadly) && p.amount > 0) p.to.currentDefense = 0;
+      events.push({ type: "attack", message: `${p.from.data.name} infligge ${p.amount} a ${p.to.data.name}` });
+    }
   };
 
-  for (const duel of engaged) if (duel.attacker.hasModifier(Modifier.FirstStrike)) strike(duel.attacker, duel.blocker);
-  for (const duel of engaged) if (duel.blocker.hasModifier(Modifier.FirstStrike)) strike(duel.blocker, duel.attacker);
-  for (const duel of engaged) if (!duel.attacker.hasModifier(Modifier.FirstStrike)) strike(duel.attacker, duel.blocker);
-  for (const duel of engaged) if (!duel.blocker.hasModifier(Modifier.FirstStrike)) strike(duel.blocker, duel.attacker);
+  strikeSimultaneously(
+    engaged
+      .filter((d) => d.attacker.hasModifier(Modifier.FirstStrike))
+      .map((d) => ({ from: d.attacker, to: d.blocker }))
+      .concat(
+        engaged
+          .filter((d) => d.blocker.hasModifier(Modifier.FirstStrike))
+          .map((d) => ({ from: d.blocker, to: d.attacker })),
+      ),
+  );
+
+  strikeSimultaneously(
+    engaged
+      .filter((d) => !d.attacker.hasModifier(Modifier.FirstStrike))
+      .map((d) => ({ from: d.attacker, to: d.blocker }))
+      .concat(
+        engaged
+          .filter((d) => !d.blocker.hasModifier(Modifier.FirstStrike))
+          .map((d) => ({ from: d.blocker, to: d.attacker })),
+      ),
+  );
 
   for (const row of ROW_KEYS) {
     for (let slot = 0; slot < state.slotCount; slot++) {

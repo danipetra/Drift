@@ -2,6 +2,8 @@ import { Application } from "pixi.js";
 import { Board } from "../board/Board";
 import { Lane } from "../board/Lane";
 import { getCardsByType } from "../data/cardLoader";
+import enemyDeckIds from "../data/decks/enemyDeck.json";
+import playerDeckIds from "../data/decks/playerDeck.json";
 import { aiChooseAttackers, aiChooseBlocks } from "../game/ai";
 import { BoardState, lanesOfSide, type RowKey, type Side } from "../game/BoardState";
 import { CardInstance } from "../game/CardInstance";
@@ -13,9 +15,13 @@ import {
   type BlockDeclaration,
   type CombatEvent,
 } from "../game/combat";
+import { Deck } from "../game/Deck";
+import { HandView } from "../hand/HandView";
 import type { CardData } from "../types/card";
 
 const SLOT_COUNT = 4;
+const INITIAL_HAND_SIZE = 3;
+const HAND_MARGIN = 20;
 
 type Phase = "attack" | "block";
 
@@ -36,6 +42,12 @@ export class Game {
   private armedAttacker: AttackDeclaration | null = null;
   private gameOver = false;
 
+  private playerDeck = new Deck(playerDeckIds as string[]);
+  private enemyDeck = new Deck(enemyDeckIds as string[]);
+  private playerHand: CardInstance[] = [];
+  private enemyHandCount = 0;
+  private handView = new HandView();
+
   async init(container: HTMLElement): Promise<void> {
     await this.app.init({
       background: "#101418",
@@ -54,10 +66,19 @@ export class Game {
 
     this.populateDemoCards();
     this.updateHealthDisplay();
+    this.app.stage.addChild(this.handView);
 
     this.actionButton = document.querySelector<HTMLButtonElement>("#action-button")!;
     this.statusEl = document.querySelector<HTMLDivElement>("#status")!;
     this.logEl = document.querySelector<HTMLDivElement>("#log")!;
+
+    // `startAttackPhase` pesca automaticamente una carta a inizio turno: si
+    // pesca una in meno qui per non sballare la dimensione della mano di
+    // apertura, dato che il primo turno la completa.
+    for (let i = 0; i < INITIAL_HAND_SIZE - 1; i++) {
+      this.drawPlayerCard();
+      this.drawEnemyCard();
+    }
 
     this.startAttackPhase("player");
 
@@ -90,6 +111,24 @@ export class Game {
     this.placeCard("playerRanged", 1, robots[2]);
   }
 
+  // ---- Mazzo e mano ----
+
+  private drawPlayerCard(): void {
+    const data = this.playerDeck.draw();
+    if (!data) return;
+    this.playerHand.push(new CardInstance(data));
+    this.updateHandDisplay();
+  }
+
+  private drawEnemyCard(): void {
+    if (this.enemyDeck.draw()) this.enemyHandCount++;
+  }
+
+  private updateHandDisplay(): void {
+    this.handView.setCards(this.playerHand);
+    this.handleResize();
+  }
+
   // ---- Fase di attacco ----
 
   private startAttackPhase(side: Side): void {
@@ -100,12 +139,14 @@ export class Game {
     this.untapSide(side);
 
     if (side === "player") {
+      this.drawPlayerCard();
       this.statusEl.textContent = "Il tuo turno: scegli le carte che attaccano";
       this.actionButton.textContent = "Dichiara attacco";
       this.actionButton.disabled = false;
       this.actionButton.onclick = () => this.confirmPlayerAttackers();
       this.refreshBoardInteractivity();
     } else {
+      this.drawEnemyCard();
       this.statusEl.textContent = "Il nemico attacca...";
       const attackers = aiChooseAttackers(this.state, "opponent");
       this.beginBlockPhase("opponent", attackers);
@@ -127,7 +168,9 @@ export class Game {
     for (const row of lanesOfSide(side)) {
       for (let slot = 0; slot < this.state.slotCount; slot++) {
         const card = this.state.getCard(row, slot);
-        if (card) card.tapped = false;
+        if (!card) continue;
+        card.tapped = false;
+        this.lanes[row].setTapped(slot, false);
       }
     }
   }
@@ -156,6 +199,17 @@ export class Game {
   private armAttacker(ref: AttackDeclaration): void {
     this.armedAttacker = ref;
     this.refreshBoardInteractivity();
+
+    const attacker = this.state.getCard(ref.row, ref.slot);
+    const hasLegalBlocker = lanesOfSide("player").some((row) =>
+      Array.from({ length: this.state.slotCount }, (_, slot) => slot).some((slot) =>
+        canBlock(this.state, ref.row, ref.slot, row, slot),
+      ),
+    );
+    this.statusEl.textContent =
+      attacker && !hasLegalBlocker
+        ? `${attacker.data.name} non è bloccabile (vola o è furtivo): scegli un altro attaccante o conferma`
+        : "Il nemico attacca: scegli con chi bloccare";
   }
 
   private assignBlocker(row: RowKey, slot: number): void {
@@ -193,7 +247,6 @@ export class Game {
     if (defendingSide !== "player") return;
     this.actionButton.disabled = !guardObligationsSatisfied(
       this.state,
-      "player",
       lanesOfSide("player"),
       this.declaredAttackers,
       this.declaredBlocks,
@@ -311,6 +364,12 @@ export class Game {
   }
 
   private handleResize = (): void => {
-    this.board.fitToScreen(this.app.screen.width, this.app.screen.height);
+    const handHeight = this.handView.handHeight();
+    const reserved = handHeight + HAND_MARGIN * 2;
+    this.board.fitToScreen(this.app.screen.width, this.app.screen.height - reserved);
+    this.handView.position.set(
+      (this.app.screen.width - this.handView.handWidth()) / 2,
+      this.app.screen.height - handHeight - HAND_MARGIN,
+    );
   };
 }

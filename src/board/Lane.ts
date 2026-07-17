@@ -66,4 +66,8 @@ export class Lane extends Container {
   setInteractive(slot: number, onClick: (() => void) | null): void {
     this.cardViews[slot]?.setInteractive(onClick);
   }
+
+  setTapped(slot: number, tapped: boolean): void {
+    this.cardViews[slot]?.setTapped(tapped);
+  }
 }

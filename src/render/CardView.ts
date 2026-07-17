@@ -15,8 +15,6 @@ export class CardView extends Container {
     this.instance = instance;
     const data = instance.data;
 
-    if (instance.tapped) this.alpha = 0.45;
-
     const style = FRAME_STYLES[data.type];
 
     const frame = new Graphics()
@@ -80,6 +78,12 @@ export class CardView extends Container {
 
     this.outline = new Graphics();
     this.addChild(this.outline);
+
+    this.setTapped(instance.tapped);
+  }
+
+  setTapped(tapped: boolean): void {
+    this.alpha = tapped ? 0.45 : 1;
   }
 
   setOutline(color: number | null): void {
