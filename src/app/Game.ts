@@ -4,15 +4,14 @@ import { Lane } from "../board/Lane";
 import { getCardsByType } from "../data/cardLoader";
 import enemyDeckIds from "../data/decks/enemyDeck.json";
 import playerDeckIds from "../data/decks/playerDeck.json";
-import { aiChooseAttackers, aiChooseBlocks } from "../game/ai";
-import { BoardState, lanesOfSide, type RowKey, type Side } from "../game/BoardState";
+import { aiChooseAttackers, aiReinforce } from "../game/ai";
+import { BoardState, laneRoleOf, lanesOfSide, type RowKey, type Side } from "../game/BoardState";
 import { CardInstance } from "../game/CardInstance";
 import {
-  canBlock,
-  guardObligationsSatisfied,
+  canTargetWithRanged,
   resolveCombat,
   type AttackDeclaration,
-  type BlockDeclaration,
+  type AttackTarget,
   type CombatEvent,
 } from "../game/combat";
 import { Deck } from "../game/Deck";
@@ -23,8 +22,6 @@ const SLOT_COUNT = 4;
 const INITIAL_HAND_SIZE = 3;
 const HAND_MARGIN = 20;
 
-type Phase = "attack" | "block";
-
 export class Game {
   private app = new Application();
   private board!: Board;
@@ -32,15 +29,13 @@ export class Game {
   private lanes!: Record<RowKey, Lane>;
   private actionButton!: HTMLButtonElement;
   private backButton!: HTMLButtonElement;
+  private targetFaceButton!: HTMLButtonElement;
   private statusEl!: HTMLDivElement;
   private logEl!: HTMLDivElement;
 
   private activeSide: Side = "player";
-  private phase: Phase = "attack";
   private selectedAttackers: AttackDeclaration[] = [];
-  private declaredAttackers: AttackDeclaration[] = [];
-  private declaredBlocks: BlockDeclaration[] = [];
-  private armedAttacker: AttackDeclaration | null = null;
+  private armedRangedAttacker: { row: RowKey; slot: number } | null = null;
   private armedHandIndex: number | null = null;
   private confirmingAttack = false;
   private gameOver = false;
@@ -77,6 +72,7 @@ export class Game {
 
     this.actionButton = document.querySelector<HTMLButtonElement>("#action-button")!;
     this.backButton = document.querySelector<HTMLButtonElement>("#back-button")!;
+    this.targetFaceButton = document.querySelector<HTMLButtonElement>("#target-face-button")!;
     this.statusEl = document.querySelector<HTMLDivElement>("#status")!;
     this.manaEl = document.querySelector<HTMLDivElement>("#mana")!;
     this.logEl = document.querySelector<HTMLDivElement>("#log")!;
@@ -142,15 +138,16 @@ export class Game {
     this.manaEl.textContent = `Mana: ${this.playerMana}`;
   }
 
-  // ---- Fase di attacco ----
+  // ---- Turno ----
 
   private startAttackPhase(side: Side): void {
     if (this.gameOver) return;
     this.activeSide = side;
-    this.phase = "attack";
     this.selectedAttackers = [];
+    this.armedRangedAttacker = null;
     this.confirmingAttack = false;
     this.backButton.style.display = "none";
+    this.targetFaceButton.style.display = "none";
     this.untapSide(side);
 
     if (side === "player") {
@@ -165,9 +162,10 @@ export class Game {
       this.refreshBoardInteractivity();
     } else {
       this.drawEnemyCard();
+      aiReinforce(this.state, "opponent");
+      const attacks = aiChooseAttackers(this.state, "opponent");
       this.statusEl.textContent = "Il nemico attacca...";
-      const attackers = aiChooseAttackers(this.state, "opponent");
-      this.beginBlockPhase("opponent", attackers);
+      this.resolveAndAdvance("opponent", attacks);
     }
   }
 
@@ -198,17 +196,45 @@ export class Game {
   private confirmPlayerAttackers(): void {
     this.confirmingAttack = false;
     this.backButton.style.display = "none";
-    this.beginBlockPhase("player", [...this.selectedAttackers]);
+    this.resolveAndAdvance("player", [...this.selectedAttackers]);
   }
 
-  private toggleSelectedAttacker(row: RowKey, slot: number): void {
+  private toggleMeleeAttacker(row: RowKey, slot: number): void {
     const idx = this.selectedAttackers.findIndex((a) => a.row === row && a.slot === slot);
     if (idx >= 0) this.selectedAttackers.splice(idx, 1);
     else this.selectedAttackers.push({ row, slot });
     this.refreshBoardInteractivity();
   }
 
+  private armRangedAttacker(row: RowKey, slot: number): void {
+    const idx = this.selectedAttackers.findIndex((a) => a.row === row && a.slot === slot);
+    if (idx >= 0) {
+      this.selectedAttackers.splice(idx, 1);
+      this.refreshBoardInteractivity();
+      return;
+    }
+    this.armedHandIndex = null;
+    this.armedRangedAttacker = { row, slot };
+    this.statusEl.textContent = "Scegli il bersaglio per l'attacco a distanza, oppure colpisci il volto";
+    this.refreshBoardInteractivity();
+  }
+
+  private cancelRangedArm(): void {
+    this.armedRangedAttacker = null;
+    this.statusEl.textContent = "Il tuo turno: scegli le carte che attaccano";
+    this.refreshBoardInteractivity();
+  }
+
+  private assignRangedTarget(target: AttackTarget): void {
+    if (!this.armedRangedAttacker) return;
+    this.selectedAttackers.push({ ...this.armedRangedAttacker, target });
+    this.armedRangedAttacker = null;
+    this.statusEl.textContent = "Il tuo turno: scegli le carte che attaccano";
+    this.refreshBoardInteractivity();
+  }
+
   private toggleArmedHandCard(index: number): void {
+    this.armedRangedAttacker = null;
     this.armedHandIndex = this.armedHandIndex === index ? null : index;
     this.refreshBoardInteractivity();
 
@@ -227,13 +253,24 @@ export class Game {
 
     this.playerHand.splice(this.armedHandIndex, 1);
     this.playerMana -= instance.cost;
-    // Appena giocata: non può ancora attaccare né bloccare, come una carta tappata.
+    // Appena giocata: non può ancora attaccare, come una carta tappata.
     instance.tapped = true;
     this.state.setCard(row, slot, instance);
     this.lanes[row].setCard(slot, instance);
     this.armedHandIndex = null;
     this.updateHandDisplay();
     this.updateManaDisplay();
+    this.refreshBoardInteractivity();
+  }
+
+  private moveReserveForward(meleeRow: RowKey, slot: number): void {
+    const rangedRow = lanesOfSide("player")[1];
+    const reserve = this.state.getCard(rangedRow, slot);
+    if (!reserve) return;
+    this.state.setCard(meleeRow, slot, reserve);
+    this.state.setCard(rangedRow, slot, undefined);
+    this.lanes[meleeRow].setCard(slot, reserve);
+    this.lanes[rangedRow].setCard(slot, undefined);
     this.refreshBoardInteractivity();
   }
 
@@ -248,88 +285,10 @@ export class Game {
     }
   }
 
-  // ---- Fase di blocco ----
-
-  private beginBlockPhase(attackingSide: Side, attackers: AttackDeclaration[]): void {
-    this.phase = "block";
-    this.declaredAttackers = attackers;
-    this.declaredBlocks = [];
-    this.armedAttacker = null;
-    const defendingSide: Side = attackingSide === "player" ? "opponent" : "player";
-
-    if (defendingSide === "player") {
-      this.statusEl.textContent = "Il nemico attacca: scegli con chi bloccare";
-      this.actionButton.textContent = "Conferma blocchi";
-      this.actionButton.onclick = () => this.confirmBlocks(attackingSide);
-      this.refreshBoardInteractivity();
-      this.updateConfirmBlocksEnabled();
-    } else {
-      const blocks = aiChooseBlocks(this.state, "opponent", attackers);
-      this.resolveAndAdvance(attackingSide, attackers, blocks);
-    }
-  }
-
-  private armAttacker(ref: AttackDeclaration): void {
-    this.armedAttacker = ref;
-    this.refreshBoardInteractivity();
-
-    const attacker = this.state.getCard(ref.row, ref.slot);
-    const hasLegalBlocker = lanesOfSide("player").some((row) =>
-      Array.from({ length: this.state.slotCount }, (_, slot) => slot).some((slot) =>
-        canBlock(this.state, ref.row, ref.slot, row, slot),
-      ),
-    );
-    this.statusEl.textContent =
-      attacker && !hasLegalBlocker
-        ? `${attacker.data.name} non è bloccabile (vola o è furtivo): scegli un altro attaccante o conferma`
-        : "Il nemico attacca: scegli con chi bloccare";
-  }
-
-  private assignBlocker(row: RowKey, slot: number): void {
-    if (!this.armedAttacker) return;
-    const armed = this.armedAttacker;
-    this.declaredBlocks = this.declaredBlocks.filter(
-      (b) =>
-        !(b.attackerRow === armed.row && b.attackerSlot === armed.slot) &&
-        !(b.blockerRow === row && b.blockerSlot === slot),
-    );
-    this.declaredBlocks.push({
-      attackerRow: armed.row,
-      attackerSlot: armed.slot,
-      blockerRow: row,
-      blockerSlot: slot,
-    });
-    this.armedAttacker = null;
-    this.refreshBoardInteractivity();
-    this.updateConfirmBlocksEnabled();
-  }
-
-  private unassignBlocker(row: RowKey, slot: number): void {
-    this.declaredBlocks = this.declaredBlocks.filter((b) => !(b.blockerRow === row && b.blockerSlot === slot));
-    this.refreshBoardInteractivity();
-    this.updateConfirmBlocksEnabled();
-  }
-
-  private confirmBlocks(attackingSide: Side): void {
-    this.resolveAndAdvance(attackingSide, this.declaredAttackers, this.declaredBlocks);
-  }
-
-  private updateConfirmBlocksEnabled(): void {
-    if (this.phase !== "block") return;
-    const defendingSide: Side = this.activeSide === "player" ? "opponent" : "player";
-    if (defendingSide !== "player") return;
-    this.actionButton.disabled = !guardObligationsSatisfied(
-      this.state,
-      lanesOfSide("player"),
-      this.declaredAttackers,
-      this.declaredBlocks,
-    );
-  }
-
   // ---- Risoluzione ----
 
-  private resolveAndAdvance(attackingSide: Side, attackers: AttackDeclaration[], blocks: BlockDeclaration[]): void {
-    const events = resolveCombat(this.state, attackingSide, attackers, blocks);
+  private resolveAndAdvance(attackingSide: Side, attacks: AttackDeclaration[]): void {
+    const events = resolveCombat(this.state, attackingSide, attacks);
     this.syncBoardView();
     this.updateHealthDisplay();
     this.logEvents(events);
@@ -366,6 +325,7 @@ export class Game {
     this.gameOver = true;
     this.actionButton.disabled = true;
     this.backButton.style.display = "none";
+    this.targetFaceButton.style.display = "none";
     this.statusEl.textContent =
       this.state.playerHealth <= 0 && this.state.opponentHealth <= 0
         ? "Pareggio!"
@@ -402,66 +362,66 @@ export class Game {
       this.handView.setInteractive(i, null);
       this.handView.setOutline(i, null);
     }
+    this.targetFaceButton.style.display = "none";
 
-    if (this.phase === "attack" && this.activeSide === "player") {
-      if (this.confirmingAttack) return; // nessuna modifica ammessa in fase di conferma
+    if (this.gameOver || this.activeSide !== "player") return;
+    if (this.confirmingAttack) return; // nessuna modifica ammessa in fase di conferma
 
-      for (const row of lanesOfSide("player")) {
+    // Mostra comunque le carte già selezionate, anche mentre si sceglie un bersaglio ranged.
+    for (const a of this.selectedAttackers) {
+      this.lanes[a.row].setOutline(a.slot, 0xffd54f);
+    }
+
+    if (this.armedRangedAttacker) {
+      this.actionButton.disabled = true;
+      const armed = this.armedRangedAttacker;
+      this.lanes[armed.row].setOutline(armed.slot, 0xff8a65);
+      this.lanes[armed.row].setInteractive(armed.slot, () => this.cancelRangedArm());
+
+      for (const row of lanesOfSide("opponent")) {
         for (let slot = 0; slot < this.state.slotCount; slot++) {
-          const card = this.state.getCard(row, slot);
-          if (card) {
-            if (card.tapped) continue;
-            const isSelected = this.selectedAttackers.some((a) => a.row === row && a.slot === slot);
-            this.lanes[row].setOutline(slot, isSelected ? 0xffd54f : null);
-            this.lanes[row].setInteractive(slot, () => this.toggleSelectedAttacker(row, slot));
-          } else if (this.armedHandIndex !== null && this.playerHand[this.armedHandIndex].cost <= this.playerMana) {
-            this.lanes[row].setPlaceholderHighlight(slot, 0x66bb6a);
-            this.lanes[row].setPlaceholderInteractive(slot, () => this.placeHandCard(row, slot));
-          }
+          if (!canTargetWithRanged(this.state, row, slot)) continue;
+          this.lanes[row].setOutline(slot, 0xff8a65);
+          this.lanes[row].setInteractive(slot, () => this.assignRangedTarget({ type: "card", row, slot }));
         }
       }
 
-      this.playerHand.forEach((card, index) => {
-        const isArmed = index === this.armedHandIndex;
-        const isAffordable = card.cost <= this.playerMana;
-        this.handView.setOutline(index, isArmed ? 0xffd54f : isAffordable ? 0x4fc3f7 : null);
-        this.handView.setInteractive(index, () => this.toggleArmedHandCard(index));
-      });
-
+      this.targetFaceButton.style.display = "";
+      this.targetFaceButton.onclick = () => this.assignRangedTarget({ type: "face" });
       return;
     }
 
-    if (this.phase === "block") {
-      const defendingSide: Side = this.activeSide === "player" ? "opponent" : "player";
+    this.actionButton.disabled = false;
+    const [playerMeleeRow, playerRangedRow] = lanesOfSide("player");
 
-      for (const ref of this.declaredAttackers) {
-        const isArmed = this.armedAttacker?.row === ref.row && this.armedAttacker?.slot === ref.slot;
-        this.lanes[ref.row].setOutline(ref.slot, isArmed ? 0xff8a65 : 0xffd54f);
-      }
-
-      if (defendingSide !== "player") return;
-
-      for (const ref of this.declaredAttackers) {
-        this.lanes[ref.row].setInteractive(ref.slot, () => this.armAttacker(ref));
-      }
-
-      for (const row of lanesOfSide("player")) {
-        for (let slot = 0; slot < this.state.slotCount; slot++) {
-          const card = this.state.getCard(row, slot);
-          if (!card || card.tapped) continue;
-          const assignment = this.declaredBlocks.find((b) => b.blockerRow === row && b.blockerSlot === slot);
-          if (assignment) {
-            this.lanes[row].setOutline(slot, 0x66bb6a);
-            this.lanes[row].setInteractive(slot, () => this.unassignBlocker(row, slot));
-          } else if (
-            this.armedAttacker &&
-            canBlock(this.state, this.armedAttacker.row, this.armedAttacker.slot, row, slot)
-          ) {
-            this.lanes[row].setInteractive(slot, () => this.assignBlocker(row, slot));
+    for (const row of lanesOfSide("player")) {
+      for (let slot = 0; slot < this.state.slotCount; slot++) {
+        const card = this.state.getCard(row, slot);
+        if (card) {
+          if (card.tapped) continue;
+          const isSelected = this.selectedAttackers.some((a) => a.row === row && a.slot === slot);
+          this.lanes[row].setOutline(slot, isSelected ? 0xffd54f : null);
+          if (laneRoleOf(row) === "melee") {
+            this.lanes[row].setInteractive(slot, () => this.toggleMeleeAttacker(row, slot));
+          } else {
+            this.lanes[row].setInteractive(slot, () => this.armRangedAttacker(row, slot));
           }
+        } else if (this.armedHandIndex !== null && this.playerHand[this.armedHandIndex].cost <= this.playerMana) {
+          this.lanes[row].setPlaceholderHighlight(slot, 0x66bb6a);
+          this.lanes[row].setPlaceholderInteractive(slot, () => this.placeHandCard(row, slot));
+        } else if (row === playerMeleeRow && this.state.getCard(playerRangedRow, slot)) {
+          this.lanes[row].setPlaceholderHighlight(slot, 0x9575cd);
+          this.lanes[row].setPlaceholderInteractive(slot, () => this.moveReserveForward(row, slot));
         }
       }
     }
+
+    this.playerHand.forEach((card, index) => {
+      const isArmed = index === this.armedHandIndex;
+      const isAffordable = card.cost <= this.playerMana;
+      this.handView.setOutline(index, isArmed ? 0xffd54f : isAffordable ? 0x4fc3f7 : null);
+      this.handView.setInteractive(index, () => this.toggleArmedHandCard(index));
+    });
   }
 
   private handleResize = (): void => {
