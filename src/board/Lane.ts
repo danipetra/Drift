@@ -1,4 +1,4 @@
-import { Container, Graphics } from "pixi.js";
+import { Container, Graphics, Rectangle } from "pixi.js";
 import { CARD_WIDTH, CARD_HEIGHT, CardView } from "../render/CardView";
 import type { CardInstance } from "../game/CardInstance";
 
@@ -13,6 +13,7 @@ export class Lane extends Container {
   readonly slotCount: number;
   private background: Graphics;
   private cardViews: (CardView | undefined)[];
+  private placeholders: Graphics[];
 
   constructor(owner: LaneOwner, role: LaneRole, slotCount = 4) {
     super();
@@ -24,6 +25,15 @@ export class Lane extends Container {
     this.background = new Graphics();
     this.addChild(this.background);
     this.drawBackground(this.laneWidth());
+
+    this.placeholders = [];
+    for (let slot = 0; slot < slotCount; slot++) {
+      const placeholder = new Graphics();
+      placeholder.position.set(slot * (CARD_WIDTH + SLOT_GAP), 0);
+      placeholder.hitArea = new Rectangle(0, 0, CARD_WIDTH, CARD_HEIGHT);
+      this.addChild(placeholder);
+      this.placeholders.push(placeholder);
+    }
   }
 
   laneWidth(): number {
@@ -69,5 +79,30 @@ export class Lane extends Container {
 
   setTapped(slot: number, tapped: boolean): void {
     this.cardViews[slot]?.setTapped(tapped);
+  }
+
+  /** Evidenzia uno slot vuoto come bersaglio valido per il piazzamento di una carta dalla mano. */
+  setPlaceholderHighlight(slot: number, color: number | null): void {
+    const placeholder = this.placeholders[slot];
+    placeholder.clear();
+    if (color !== null) {
+      placeholder
+        .roundRect(0, 0, CARD_WIDTH, CARD_HEIGHT, 10)
+        .fill({ color, alpha: 0.12 })
+        .stroke({ width: 3, color, alpha: 0.8 });
+    }
+  }
+
+  setPlaceholderInteractive(slot: number, onClick: (() => void) | null): void {
+    const placeholder = this.placeholders[slot];
+    placeholder.removeAllListeners("pointertap");
+    if (onClick) {
+      placeholder.eventMode = "static";
+      placeholder.cursor = "pointer";
+      placeholder.on("pointertap", onClick);
+    } else {
+      placeholder.eventMode = "none";
+      placeholder.cursor = "default";
+    }
   }
 }

@@ -31,4 +31,12 @@ export class HandView extends Container {
   handHeight(): number {
     return CARD_HEIGHT * HAND_SCALE;
   }
+
+  setOutline(index: number, color: number | null): void {
+    this.cardViews[index]?.setOutline(color);
+  }
+
+  setInteractive(index: number, onClick: (() => void) | null): void {
+    this.cardViews[index]?.setInteractive(onClick);
+  }
 }

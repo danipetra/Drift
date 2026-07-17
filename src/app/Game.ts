@@ -40,6 +40,7 @@ export class Game {
   private declaredAttackers: AttackDeclaration[] = [];
   private declaredBlocks: BlockDeclaration[] = [];
   private armedAttacker: AttackDeclaration | null = null;
+  private armedHandIndex: number | null = null;
   private gameOver = false;
 
   private playerDeck = new Deck(playerDeckIds as string[]);
@@ -161,6 +162,24 @@ export class Game {
     const idx = this.selectedAttackers.findIndex((a) => a.row === row && a.slot === slot);
     if (idx >= 0) this.selectedAttackers.splice(idx, 1);
     else this.selectedAttackers.push({ row, slot });
+    this.refreshBoardInteractivity();
+  }
+
+  private toggleArmedHandCard(index: number): void {
+    this.armedHandIndex = this.armedHandIndex === index ? null : index;
+    this.refreshBoardInteractivity();
+  }
+
+  private placeHandCard(row: RowKey, slot: number): void {
+    if (this.armedHandIndex === null) return;
+    const [instance] = this.playerHand.splice(this.armedHandIndex, 1);
+    if (!instance) return;
+    // Appena giocata: non può ancora attaccare né bloccare, come una carta tappata.
+    instance.tapped = true;
+    this.state.setCard(row, slot, instance);
+    this.lanes[row].setCard(slot, instance);
+    this.armedHandIndex = null;
+    this.updateHandDisplay();
     this.refreshBoardInteractivity();
   }
 
@@ -302,7 +321,13 @@ export class Game {
       for (let slot = 0; slot < this.state.slotCount; slot++) {
         this.lanes[row].setInteractive(slot, null);
         this.lanes[row].setOutline(slot, null);
+        this.lanes[row].setPlaceholderInteractive(slot, null);
+        this.lanes[row].setPlaceholderHighlight(slot, null);
       }
+    }
+    for (let i = 0; i < this.playerHand.length; i++) {
+      this.handView.setInteractive(i, null);
+      this.handView.setOutline(i, null);
     }
     return true;
   }
@@ -314,19 +339,36 @@ export class Game {
       for (let slot = 0; slot < this.state.slotCount; slot++) {
         this.lanes[row].setInteractive(slot, null);
         this.lanes[row].setOutline(slot, null);
+        this.lanes[row].setPlaceholderInteractive(slot, null);
+        this.lanes[row].setPlaceholderHighlight(slot, null);
       }
+    }
+    for (let i = 0; i < this.playerHand.length; i++) {
+      this.handView.setInteractive(i, null);
+      this.handView.setOutline(i, null);
     }
 
     if (this.phase === "attack" && this.activeSide === "player") {
       for (const row of lanesOfSide("player")) {
         for (let slot = 0; slot < this.state.slotCount; slot++) {
           const card = this.state.getCard(row, slot);
-          if (!card || card.tapped) continue;
-          const isSelected = this.selectedAttackers.some((a) => a.row === row && a.slot === slot);
-          this.lanes[row].setOutline(slot, isSelected ? 0xffd54f : null);
-          this.lanes[row].setInteractive(slot, () => this.toggleSelectedAttacker(row, slot));
+          if (card) {
+            if (card.tapped) continue;
+            const isSelected = this.selectedAttackers.some((a) => a.row === row && a.slot === slot);
+            this.lanes[row].setOutline(slot, isSelected ? 0xffd54f : null);
+            this.lanes[row].setInteractive(slot, () => this.toggleSelectedAttacker(row, slot));
+          } else if (this.armedHandIndex !== null) {
+            this.lanes[row].setPlaceholderHighlight(slot, 0x66bb6a);
+            this.lanes[row].setPlaceholderInteractive(slot, () => this.placeHandCard(row, slot));
+          }
         }
       }
+
+      this.playerHand.forEach((_, index) => {
+        this.handView.setOutline(index, index === this.armedHandIndex ? 0xffd54f : null);
+        this.handView.setInteractive(index, () => this.toggleArmedHandCard(index));
+      });
+
       return;
     }
 
