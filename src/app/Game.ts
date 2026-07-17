@@ -4,7 +4,7 @@ import { Lane } from "../board/Lane";
 import { getCardsByType } from "../data/cardLoader";
 import enemyDeckIds from "../data/decks/enemyDeck.json";
 import playerDeckIds from "../data/decks/playerDeck.json";
-import { aiChooseAttackers, aiReinforce } from "../game/ai";
+import { aiChooseAttackers, aiPlayCards, aiReinforce } from "../game/ai";
 import { BoardState, laneRoleOf, lanesOfSide, sideOf, type RowKey, type Side } from "../game/BoardState";
 import { CardInstance } from "../game/CardInstance";
 import {
@@ -44,11 +44,13 @@ export class Game {
   private playerDeck = new Deck(playerDeckIds as string[]);
   private enemyDeck = new Deck(enemyDeckIds as string[]);
   private playerHand: CardInstance[] = [];
-  private enemyHandCount = 0;
+  private enemyHand: CardInstance[] = [];
   private handView = new HandView();
 
   private playerMana = 0;
   private playerTurnsTaken = 0;
+  private enemyMana = 0;
+  private enemyTurnsTaken = 0;
   private manaEl!: HTMLDivElement;
 
   private previewContainer = new Container();
@@ -130,7 +132,9 @@ export class Game {
   }
 
   private drawEnemyCard(): void {
-    if (this.enemyDeck.draw()) this.enemyHandCount++;
+    const data = this.enemyDeck.draw();
+    if (!data) return;
+    this.enemyHand.push(new CardInstance(data));
   }
 
   private updateHandDisplay(): void {
@@ -165,8 +169,14 @@ export class Game {
       this.actionButton.onclick = () => this.beginAttackConfirmation();
       this.refreshBoardInteractivity();
     } else {
+      if (this.enemyTurnsTaken > 0) this.enemyMana++;
+      this.enemyTurnsTaken++;
       this.drawEnemyCard();
       aiReinforce(this.state, "opponent");
+      const { remainingMana, played } = aiPlayCards(this.state, "opponent", this.enemyHand, this.enemyMana);
+      this.enemyMana = remainingMana;
+      for (const card of played) this.appendLog(`Il nemico gioca ${card.data.name}`);
+
       const attacks = aiChooseAttackers(this.state, "opponent");
       this.statusEl.textContent = "Il nemico attacca...";
       this.resolveAndAdvance("opponent", attacks);
@@ -314,13 +324,15 @@ export class Game {
     this.board.setPlayerHealth(this.state.playerHealth);
   }
 
-  private logEvents(events: CombatEvent[]): void {
-    for (const event of events) {
-      const line = document.createElement("p");
-      line.textContent = event.message;
-      this.logEl.appendChild(line);
-    }
+  private appendLog(message: string): void {
+    const line = document.createElement("p");
+    line.textContent = message;
+    this.logEl.appendChild(line);
     this.logEl.scrollTop = this.logEl.scrollHeight;
+  }
+
+  private logEvents(events: CombatEvent[]): void {
+    for (const event of events) this.appendLog(event.message);
   }
 
   private checkGameOver(): boolean {

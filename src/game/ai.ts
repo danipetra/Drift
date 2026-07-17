@@ -1,4 +1,5 @@
-import { lanesOfSide, type BoardState, type Side } from "./BoardState";
+import type { CardInstance } from "./CardInstance";
+import { lanesOfSide, type BoardState, type RowKey, type Side } from "./BoardState";
 import { canTargetWithRanged, type AttackDeclaration, type AttackTarget } from "./combat";
 
 /** Se lo slot melee di una colonna è vuoto e c'è una ranged in retrovia, la porta avanti. */
@@ -11,6 +12,46 @@ export function aiReinforce(state: BoardState, side: Side): void {
     state.setCard(meleeRow, slot, reserve);
     state.setCard(rangedRow, slot, undefined);
   }
+}
+
+export interface AiPlayResult {
+  remainingMana: number;
+  played: CardInstance[];
+}
+
+/**
+ * IA elementare: gioca dalla mano le carte più economiche per prime, riempiendo
+ * gli slot liberi (prima melee poi ranged) finché il mana lo consente. Muta sia
+ * `state` che `hand`.
+ */
+export function aiPlayCards(state: BoardState, side: Side, hand: CardInstance[], mana: number): AiPlayResult {
+  const [meleeRow, rangedRow] = lanesOfSide(side);
+  const emptySlots: { row: RowKey; slot: number }[] = [];
+  for (const row of [meleeRow, rangedRow]) {
+    for (let slot = 0; slot < state.slotCount; slot++) {
+      if (!state.getCard(row, slot)) emptySlots.push({ row, slot });
+    }
+  }
+
+  let remainingMana = mana;
+  const played: CardInstance[] = [];
+  const cheapestFirst = [...hand].sort((a, b) => a.cost - b.cost);
+
+  for (const card of cheapestFirst) {
+    if (emptySlots.length === 0) break;
+    if (card.cost > remainingMana) break; // le successive costano uguale o di più
+
+    const target = emptySlots.shift()!;
+    card.tapped = true;
+    state.setCard(target.row, target.slot, card);
+    remainingMana -= card.cost;
+    played.push(card);
+
+    const handIndex = hand.indexOf(card);
+    if (handIndex >= 0) hand.splice(handIndex, 1);
+  }
+
+  return { remainingMana, played };
 }
 
 /** IA elementare: attacca con tutto ciò che è disponibile; i ranged mirano al bersaglio più debole rimasto. */
