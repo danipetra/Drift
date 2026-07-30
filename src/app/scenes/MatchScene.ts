@@ -3,7 +3,6 @@ import { Application, Container, Graphics } from "pixi.js";
 import { Board } from "../../board/Board";
 import { Lane } from "../../board/Lane";
 import { pickRandomEnemyDeckIds } from "../../data/enemyDecks";
-import playerDeckIds from "../../data/decks/playerDeck.json";
 import { aiChooseAttackers, aiPlayCards, aiReinforce } from "../../game/ai";
 import { BoardState, laneRoleOf, lanesOfSide, sideOf, type RowKey, type Side } from "../../game/BoardState";
 import { CardInstance } from "../../game/CardInstance";
@@ -18,6 +17,7 @@ import {
   type CombatEvent,
 } from "../../game/combat";
 import { Deck } from "../../game/Deck";
+import { getPlayerProfile } from "../../game/PlayerProfile";
 import { HandView, HAND_SCALE } from "../../hand/HandView";
 import { dealCardFlight, fadeOut, lungeToward, popDamageNumber, rangedRecoil, shake, travelStreak } from "../../render/animations";
 import { preloadCardTextures } from "../../render/cardAssets";
@@ -31,7 +31,7 @@ const INITIAL_HAND_SIZE = 3;
 const HAND_MARGIN = 20;
 
 export interface MatchSceneConfig {
-  /** Di default il mazzo iniziale standard del giocatore; usato dalla Scalata della Torre per passare il mazzo evoluto tra i piani. */
+  /** Di default il mazzo che il giocatore ha costruito; usato dalla Scalata della Torre per passare il mazzo evoluto tra i piani. */
   playerDeckIds?: string[];
   enemyDeckIds?: string[];
   /**
@@ -84,7 +84,7 @@ export class MatchScene implements Scene {
   private activeModal: OverlayPanel | null = null;
 
   constructor(config: MatchSceneConfig = {}) {
-    this.playerDeck = new Deck(config.playerDeckIds ?? (playerDeckIds as string[]));
+    this.playerDeck = new Deck(config.playerDeckIds ?? [...getPlayerProfile().deck]);
     this.enemyDeck = new Deck(config.enemyDeckIds ?? pickRandomEnemyDeckIds());
     this.onMatchEnd = config.onMatchEnd;
   }

@@ -1,5 +1,6 @@
 import { Container, Graphics, Text } from "pixi.js";
 import type { Scene, SceneContext } from "../SceneManager";
+import { DeckBuilderScene } from "./DeckBuilderScene";
 import { MatchScene } from "./MatchScene";
 import { startNewTowerRun } from "./towerFlow";
 
@@ -19,6 +20,7 @@ export class MainMenuScene implements Scene {
   private context!: SceneContext;
   private readonly container = new Container();
   private readonly titleText: Text;
+  private readonly deckLinkText: Text;
   private readonly tileViews: Container[] = [];
 
   constructor() {
@@ -26,7 +28,14 @@ export class MainMenuScene implements Scene {
       text: "DROWNING",
       style: { fontFamily: "sans-serif", fontSize: 40, fontWeight: "bold", fill: 0xd8d8d8, letterSpacing: 4 },
     });
-    this.container.addChild(this.titleText);
+    this.deckLinkText = new Text({
+      text: "Il Tuo Mazzo",
+      style: { fontFamily: "sans-serif", fontSize: 14, fontWeight: "bold", fill: 0x4fc3f7 },
+    });
+    this.deckLinkText.eventMode = "static";
+    this.deckLinkText.cursor = "pointer";
+    this.deckLinkText.on("pointertap", () => this.context.goTo(() => new DeckBuilderScene()));
+    this.container.addChild(this.titleText, this.deckLinkText);
   }
 
   mount(context: SceneContext): void {
@@ -134,5 +143,10 @@ export class MainMenuScene implements Scene {
       tile.scale.set(scale);
       tile.position.set(startX + index * (TILE_WIDTH + TILE_GAP) * scale, tileY);
     });
+
+    this.deckLinkText.position.set(
+      (width - this.deckLinkText.width) / 2,
+      tileY + TILE_HEIGHT * scale + 28,
+    );
   };
 }

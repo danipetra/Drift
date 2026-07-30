@@ -1,6 +1,7 @@
 import { Container, Text } from "pixi.js";
 import { getCardById } from "../../data/cardLoader";
 import { CardInstance } from "../../game/CardInstance";
+import { getPlayerProfile } from "../../game/PlayerProfile";
 import { MAX_DECK_SIZE, TowerRun } from "../../game/TowerRun";
 import { pickRewardChoices } from "../../game/towerRewards";
 import { CARD_HEIGHT, CARD_WIDTH, CardView } from "../../render/CardView";
@@ -71,6 +72,8 @@ export class TowerRewardScene implements Scene {
   }
 
   private chooseCard(cardId: string): void {
+    // Permanente e indipendente dalla run: la carta resta sbloccata anche se questa run finisce.
+    getPlayerProfile().unlock(cardId);
     if (this.run.deckIds.length < MAX_DECK_SIZE) {
       this.run.deckIds.push(cardId);
       this.goToNextFloor();
