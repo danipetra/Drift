@@ -1,10 +1,36 @@
-import { Container, Text } from "pixi.js";
+import { Container, Graphics, Text } from "pixi.js";
 import { punchScale } from "../render/animations";
 import { Lane } from "./Lane";
 
 const LANE_GAP = 20;
 const CENTER_GAP = 60;
 const HP_MARGIN = 40;
+const DECK_PILE_WIDTH = 26;
+const DECK_PILE_HEIGHT = 32;
+
+interface DeckPile {
+  container: Container;
+  countText: Text;
+}
+
+/** Piccola pila di carte coperte (stilizzata) con il conteggio delle carte rimaste accanto. */
+function createDeckPile(): DeckPile {
+  const container = new Container();
+  for (let i = 2; i >= 0; i--) {
+    const card = new Graphics()
+      .roundRect(i * 2, i * -2, DECK_PILE_WIDTH, DECK_PILE_HEIGHT, 4)
+      .fill({ color: 0x2a2f36 })
+      .stroke({ width: 1.5, color: 0x6b7280 });
+    container.addChild(card);
+  }
+  const countText = new Text({
+    text: "0",
+    style: { fontFamily: "sans-serif", fontSize: 14, fontWeight: "bold", fill: 0xd8d8d8 },
+  });
+  countText.position.set(DECK_PILE_WIDTH + 8, DECK_PILE_HEIGHT / 2 - countText.height / 2 - 2);
+  container.addChild(countText);
+  return { container, countText };
+}
 
 export class Board extends Container {
   readonly opponentRanged: Lane;
@@ -13,6 +39,9 @@ export class Board extends Container {
   readonly playerRanged: Lane;
   private readonly opponentHealthText: Text;
   private readonly playerHealthText: Text;
+  private readonly opponentDeckPile: DeckPile;
+  private readonly playerDeckPile: DeckPile;
+  private readonly opponentHandIndicator: DeckPile;
 
   constructor(slotsPerLane = 4) {
     super();
@@ -31,6 +60,10 @@ export class Board extends Container {
       style: { fontFamily: "sans-serif", fontSize: 20, fontWeight: "bold", fill: 0xffffff },
     });
 
+    this.opponentDeckPile = createDeckPile();
+    this.playerDeckPile = createDeckPile();
+    this.opponentHandIndicator = createDeckPile();
+
     this.addChild(
       this.opponentRanged,
       this.opponentMelee,
@@ -38,6 +71,9 @@ export class Board extends Container {
       this.playerRanged,
       this.opponentHealthText,
       this.playerHealthText,
+      this.opponentDeckPile.container,
+      this.playerDeckPile.container,
+      this.opponentHandIndicator.container,
     );
     this.layoutLanes();
   }
@@ -62,6 +98,14 @@ export class Board extends Container {
       (laneWidth - this.playerHealthText.width) / 2,
       y + laneHeight + 8,
     );
+
+    this.opponentDeckPile.container.position.set(laneWidth - this.opponentDeckPile.container.width - 4, 6);
+    this.playerDeckPile.container.position.set(
+      laneWidth - this.playerDeckPile.container.width - 4,
+      y + laneHeight + 8,
+    );
+
+    this.opponentHandIndicator.container.position.set(4, 6);
   }
 
   setOpponentHealth(value: number): void {
@@ -84,6 +128,50 @@ export class Board extends Container {
     const text = side === "player" ? this.playerHealthText : this.opponentHealthText;
     const point = text.toGlobal({ x: text.width / 2, y: text.height / 2 });
     return { x: point.x, y: point.y };
+  }
+
+  setOpponentDeckCount(value: number): void {
+    this.setDeckCount(this.opponentDeckPile, value, "right");
+  }
+
+  setPlayerDeckCount(value: number): void {
+    this.setDeckCount(this.playerDeckPile, value, "right");
+  }
+
+  /** Le pile a destra restano ancorate al proprio bordo destro (il testo cresce verso sinistra); quella
+   * della mano rivale, a sinistra, resta ancorata al bordo sinistro (il testo cresce verso destra). */
+  private setDeckCount(pile: DeckPile, value: number, anchor: "left" | "right"): void {
+    if (anchor === "left") {
+      pile.countText.text = String(value);
+      return;
+    }
+    const rightEdge = pile.container.x + pile.container.width;
+    pile.countText.text = String(value);
+    pile.container.position.x = rightEdge - pile.container.width;
+  }
+
+  /** Centro della pila (retro carte) in coordinate globali, punto di partenza dell'animazione di pescata. */
+  getOpponentDeckGlobalCenter(): { x: number; y: number } {
+    return this.deckPileGlobalCenter(this.opponentDeckPile);
+  }
+
+  getPlayerDeckGlobalCenter(): { x: number; y: number } {
+    return this.deckPileGlobalCenter(this.playerDeckPile);
+  }
+
+  private deckPileGlobalCenter(pile: DeckPile): { x: number; y: number } {
+    const point = pile.container.toGlobal({ x: DECK_PILE_WIDTH / 2, y: DECK_PILE_HEIGHT / 2 });
+    return { x: point.x, y: point.y };
+  }
+
+  /** Piccolo "battito" sulla pila, a mostrare che il rivale ha pescato (non ha una mano visibile da animare). */
+  pulseOpponentDeck(): Promise<void> {
+    return punchScale(this.opponentDeckPile.container);
+  }
+
+  /** Stessa resa grafica della pila di pesca: retro carte + conteggio, ma per la mano del rivale. */
+  setOpponentHandCount(value: number): void {
+    this.setDeckCount(this.opponentHandIndicator, value, "left");
   }
 
   get boardWidth(): number {

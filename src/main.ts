@@ -1,6 +1,8 @@
 import "./style.css";
-import { Game } from "./app/Game";
+import { SceneManager } from "./app/SceneManager";
+import { MainMenuScene } from "./app/scenes/MainMenuScene";
 
-const container = document.querySelector<HTMLDivElement>("#app")!;
-const game = new Game();
-game.init(container);
+const appContainer = document.querySelector<HTMLDivElement>("#app")!;
+const hudRoot = document.querySelector<HTMLDivElement>("#hud-root")!;
+const manager = new SceneManager(hudRoot);
+void manager.init(appContainer, () => new MainMenuScene());

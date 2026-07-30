@@ -31,7 +31,7 @@ body {
   display: block;
 }
 
-#hud {
+#hud-root {
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
@@ -40,6 +40,12 @@ body {
   font-family: sans-serif;
   background: #16181d;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Vuoto quando la scena attiva non usa l'HUD (es. il menu principale): non deve occupare spazio o mostrare il bordo. */
+#hud-root:empty {
+  padding: 0;
+  border-top: none;
 }
 
 #hud-top {

@@ -36,6 +36,12 @@ export class HandView extends Container {
     this.cardViews[index]?.setOutline(color);
   }
 
+  /** Nasconde temporaneamente una carta già a riposo, mentre una copia "in volo" la sostituisce visivamente. */
+  setCardVisible(index: number, visible: boolean): void {
+    const view = this.cardViews[index];
+    if (view) view.visible = visible;
+  }
+
   setInteractive(
     index: number,
     onClick: (() => void) | null,
