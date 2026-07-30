@@ -1,0 +1,74 @@
+[
+  {
+    "id": "beast_squirrel",
+    "name": "Scoiattolo",
+    "type": "beast",
+    "attack": "0",
+    "defense": "1",
+    "modifiers": []
+  },
+  {
+    "id": "beast_ermine",
+    "name": "Ermellino",
+    "type": "beast",
+    "attack": "1",
+    "defense": "2",
+    "modifiers": []
+  },
+  {
+    "id": "beast_dog",
+    "name": "Cane Pastore",
+    "type": "beast",
+    "attack": "3",
+    "defense": "2",
+    "modifiers": []
+  },
+  {
+    "id": "beast_dear",
+    "name": "Cervo",
+    "type": "beast",
+    "attack": "2",
+    "defense": "4",
+    "modifiers": ["REGENERATION"]
+  },
+  {
+    "id": "beast_wolf",
+    "name": "Lupo Grigio",
+    "type": "beast",
+    "attack": "2",
+    "defense": "1",
+    "modifiers": ["FIRST_STRIKE"]
+  },
+  {
+    "id": "beast_fox",
+    "name": "Volpe",
+    "type": "beast",
+    "attack": "1",
+    "defense": "2",
+    "modifiers": ["REGENERATION"]
+  },
+  {
+    "id": "beast_hawk",
+    "name": "Falco Rapace",
+    "type": "beast",
+    "attack": "1",
+    "defense": "1",
+    "modifiers": ["FLYING"]
+  },
+  {
+    "id": "beast_bear",
+    "name": "Orso Bruno",
+    "type": "beast",
+    "attack": "3",
+    "defense": "2",
+    "modifiers": ["REGENERATION"]
+  },
+  {
+    "id": "beast_lizard",
+    "name": "Lucertola Rigenerante",
+    "type": "beast",
+    "attack": "2",
+    "defense": "5",
+    "modifiers": ["REGENERATION"]
+  }
+]
