@@ -1,159 +1,219 @@
-# Drift
+# Drowning
 
-Prototipo di card game 1v1 ispirato a *Inscryption*: creature contrapposte su un
-tabellone diviso in due corsie (mischia e distanza), con fasi di
-attacco/difesa in stile Magic. Il motore di gioco è **data-driven**: le carte
-sono definite in JSON e caricate a runtime, senza logica hard-coded per
-singola carta.
+A 1v1 card game prototype built with **Pixi.js** and **TypeScript**, combining
+positional melee combat with free-target ranged attacks across a two-lane
+board. The engine is fully **data-driven**: cards, decks, art and animations
+are all defined outside the game logic, so new content never requires touching
+the combat rules.
 
-![Fase di attacco](docs/screenshots/01-attack-phase.png)
+![Board overview](docs/media/board-overview.png)
 
 ## Concept
 
-Ogni giocatore controlla un lato del tabellone diviso in due file:
+Each player controls two lanes:
 
-- **Mischia** (`Melee`)
-- **Distanza** (`Ranged`)
+- **Melee** — front line, fixed by column: a melee card can only fight the
+  enemy melee card directly across from it.
+- **Ranged** — back line, free targeting: a ranged card can strike *any*
+  enemy card (or the enemy's face) regardless of column, but deals damage in
+  one direction only — the target never strikes back.
 
-Una carta piazzata in una corsia può attaccare o bloccare solo un'altra carta
-della stessa corsia: un mostro a distanza non intercetta un attacco in
-mischia e viceversa. Non c'è ancora un mazzo/mano/risorsa: il prototipo attuale
-mette in scena solo il **loop di combattimento**, con un board demo già
-popolato all'avvio (`Game.populateDemoCards`).
+This asymmetry is the core risk/reward of the game: ranged cards hit harder
+and pick their targets, but a lane full of enemy ranged attackers can all
+focus-fire the same card, with no artificial damage penalty needed to balance
+it — the exposure is already built into "no retaliation."
 
-## Regole di turno (stile Magic)
+If a melee slot is empty, the ranged card behind it can be brought forward
+into the front line (manually for the player, automatically for the AI) to
+plug the gap.
 
-Il turno alterna sempre due fasi, prima per un giocatore poi per l'altro:
+## Turn flow
 
-1. **Fase di attacco** — il giocatore attivo sceglie quali delle proprie
-   carte non "tappate" attaccano (`selectedAttackers`). Le carte scelte
-   vengono tappate e non potranno bloccare al turno successivo.
-2. **Fase di blocco** — il difensore assegna, una alla volta, le proprie
-   carte non tappate agli attaccanti dichiarati, rispettando le regole di
-   legalità (`canBlock` in [combat.ts](src/game/combat.ts)):
-   - stessa corsia (mischia/mischia, distanza/distanza);
-   - un attaccante **Furtivo** non può essere bloccato da nessuno;
-   - un attaccante **Volare** può essere bloccato solo da un bloccante che
-     vola a sua volta.
+Play alternates between the two sides. On your turn:
 
-Dopo la conferma dei blocchi (`resolveCombat`):
+1. A card is drawn and mana is refreshed (mana equals the number of turns
+   you've taken, so it grows by exactly 1 every turn regardless of what you
+   spent).
+2. Optionally play cards from hand into empty slots, spending mana per the
+   card's cost.
+3. Choose your attackers:
+   - Clicking an untapped **melee** card immediately marks it as attacking
+     (its target is fixed — whatever sits in the same column).
+   - Clicking an untapped **ranged** card arms it for targeting: pick any
+     legal enemy card, or the "Strike the face" button, to lock in its
+     target.
+   - Any card that would be lethal to its (would-be) target shows a **💀 KO**
+     marker on the target, so you can preview the outcome before confirming.
+4. Press **Attack** to resolve combat, or **Cancel** to clear your current
+   selection without untapping/unplaying anything. Attacking taps a card for
+   the rest of the round.
 
-- gli attaccanti non bloccati infliggono danno diretto alla vita del
-  difensore;
-- gli attaccanti bloccati duellano con il proprio bersaglio: il danno è
-  simultaneo, tranne per le carte con **Attacco rapido** che colpiscono
-  prima e possono uccidere il bersaglio senza subire contraccolpo;
-  **Tocco letale** rende letale qualsiasi danno inflitto, indipendentemente
-  dal valore di attacco;
-- le carte con difesa a 0 muoiono e vengono rimosse dal tabellone.
+Combat resolves in this order: melee duels (First Strike sub-phase first,
+then the rest, simultaneously) → deaths are removed → ranged strikes →
+deaths are removed again. The turn then passes to the other side, which goes
+through the same steps (driven by the AI for the opponent).
 
-Il turno passa quindi al lato opposto, che va a sua volta in fase di
-attacco (solo le sue carte si "stappano": non esiste uno step di untap
-condiviso, `untapSide` viene chiamato solo per il lato che sta per attaccare).
-La partita finisce quando la vita di un giocatore (partono entrambi da 20)
-scende a 0 o sotto.
+The game ends when either side's health (starting at 20) reaches 0.
 
-### Il modificatore Guardia
+## Modifiers
 
-Una carta **Guardia** non tappata, se ha almeno un bersaglio legale tra gli
-attaccanti dichiarati, **deve** comparire tra i blocchi: il pulsante di
-conferma resta disabilitato finché l'obbligo non è soddisfatto
-(`guardObligationsSatisfied`). È l'opposto della "menace" di Magic: qui è la
-carta difensiva ad essere costretta a intervenire, non l'attaccante a
-richiedere più bloccanti.
-
-![Fase di blocco](docs/screenshots/02-block-phase.png)
-*Il nemico ha dichiarato l'attacco (contorno giallo); il giocatore assegna i
-propri bloccanti tra le carte disponibili nella corsia corrispondente.*
-
-## Modificatori disponibili
-
-| Modificatore | Effetto |
+| Modifier | Effect |
 | --- | --- |
-| `FLYING` (Volare) | Può essere bloccato solo da un'altra carta che vola |
-| `DEADLY` (Tocco letale) | Qualsiasi danno inflitto da questa carta è letale |
-| `GUARD` (Guardia) | Deve bloccare se ha un bersaglio legale disponibile |
-| `STEALTH` (Furtivo) | Non può essere bloccato da nessuna carta |
-| `FIRST_STRIKE` (Attacco rapido) | Infligge danno prima del normale scambio di colpi |
+| `FLYING` | A melee attack from this card skips the column matchup and hits the face directly, *unless* the defending column also has a Flying card, in which case they duel normally. |
+| `STEALTH` | A melee attack from this card always skips the column matchup and hits the face directly — no exception. |
+| `DEADLY` | Any damage this card deals is instantly lethal, regardless of amount. |
+| `GUARD` | This card cannot be chosen as a ranged target (it can still be attacked in melee via its column). |
+| `FIRST_STRIKE` | Deals its melee damage in an earlier sub-phase, before all other melee duels resolve. |
 
-Definiti in [types/card.ts](src/types/card.ts), applicati in
-[game/combat.ts](src/game/combat.ts).
+Modifiers are defined in [types/card.ts](src/types/card.ts) and interpreted
+by [game/combat.ts](src/game/combat.ts) — adding a new one only requires a
+label and the corresponding branch in the combat resolver.
 
-## Avversario
+## Opponent AI
 
-L'avversario è gestito da un'IA elementare ([game/ai.ts](src/game/ai.ts)):
-attacca sempre con tutto ciò che è disponibile e, in difesa, prima soddisfa
-gli obblighi di Guardia poi blocca ciò che può bloccare legalmente. Non c'è
-ancora alcuna valutazione strategica dei trade.
+The opponent ([game/ai.ts](src/game/ai.ts)) runs a simple deterministic
+routine each turn:
 
-## Architettura
+1. **Reinforce** — pull a ranged card forward into any empty melee slot in
+   its column.
+2. **Play** — from its hand, play the cheapest cards first into empty slots
+   (melee before ranged) until it runs out of mana or slots.
+3. **Attack** — attack with everything untapped; ranged attackers prioritize
+   the enemy card with the lowest remaining defense, falling back to the
+   face once no card targets are left.
+
+There's no trade evaluation or lookahead — it's a baseline opponent, not a
+strategic one.
+
+## Card preview and feedback
+
+Long-pressing any card — in hand or on the board, yours or the opponent's —
+pops up an enlarged preview (left side for your cards, right side for the
+opponent's) so you can read small text without losing your place on the
+board.
+
+![Ranged targeting with a death-marker preview](docs/media/ranged-targeting.png)
+![Long-press card preview](docs/media/zoom-preview.png)
+
+## Animations
+
+Combat and card placement are animated with **GSAP**:
+
+- Melee attackers lunge toward their target; ranged attackers recoil and
+  fire a traveling streak toward theirs.
+- Cards shake when they take damage, and a floating damage number pops up
+  at the point of impact.
+- Cards that die fade out before being removed from the board.
+- Cards dealt from hand (or drawn by the AI) fly from their origin to their
+  resting slot instead of appearing instantly — from the hand for the
+  player, dropping in from above the board for the AI.
+- A direct hit to a player's face makes the health number "punch" alongside
+  its damage popup.
+
+The board locks interaction (except the long-press preview, which stays
+available even mid-replay) while an animated combat sequence plays out, so
+you always see the full story of a turn before acting again.
+
+![Melee attack animation](docs/media/melee-attack.gif)
+![Card deal animation](docs/media/card-deal.gif)
+
+## Card art pipeline
+
+Cards render with real art when available and fall back to a plain
+programmatic frame otherwise — nothing has to opt in or out of art support.
+Adding art for a card is just dropping a correctly-named PNG in place:
 
 ```
-src/
-  types/card.ts       Definizione dati carta (CardData) e modificatori
-  data/cards/*.json    Set di carte data-driven (beast.json, robot.json)
-  data/cardLoader.ts   Accesso tipizzato ai set di carte
-  game/
-    CardInstance.ts    Istanza runtime di una carta (attacco/difesa correnti, tap)
-    BoardState.ts       Stato puro del tabellone: 4 file, vita, slot
-    combat.ts           Regole di blocco/Guardia e risoluzione del combattimento
-    ai.ts               IA elementare per attacchi e blocchi dell'avversario
-  board/
-    Board.ts            Container Pixi che dispone le 4 corsie e il testo vita
-    Lane.ts             Una singola corsia (fila di slot) e le sue CardView
-  render/
-    CardView.ts          Rendering Pixi di una singola carta
-    frames.ts            Stile visivo (colori/etichetta) per tipo di carta
-  app/Game.ts           Macchina a stati del turno (attacco/blocco), collega
-                         input DOM (HUD) e interazioni sul tabellone Pixi
-  main.ts               Entry point, monta Game nel div #app
+src/assets/cards/
+  backs/<type>.png       card back, one per card type
+  frames/<type>.png      frame/background, one per card type
+  art/<card id>.png      illustration, one per card (e.g. beast_wolf.png)
 ```
 
-Il rendering del tabellone è interamente su **canvas Pixi.js**; l'HUD
-(stato testuale, pulsante azione, log eventi) è invece HTML/CSS sovrapposto
-al canvas, definito in [index.html](index.html) e collegato da `Game.ts`.
+[`render/cardAssets.ts`](src/render/cardAssets.ts) uses `import.meta.glob` to
+discover these files automatically at build time — the same "no code change
+needed" spirit as the JSON card data below. All discovered textures are
+preloaded once via `Assets.load` at startup (`Texture.from` alone does not
+trigger a fetch for an unregistered URL, which is a Pixi.js gotcha worth
+knowing if textures render blank).
 
-## Dati delle carte
+## Card and deck data
 
-Le carte non hanno codice dedicato: sono record JSON in
-[src/data/cards/](src/data/cards/), uno per tipo (`beast.json`, `robot.json`),
-caricati da [cardLoader.ts](src/data/cardLoader.ts). Aggiungere una carta
-significa aggiungere una voce con `id`, `name`, `type`, `attack`, `defense`
-e un array di `modifiers` — nessuna modifica al motore è necessaria finché
-il comportamento desiderato è già coperto dai modificatori esistenti.
+Cards have no per-card code: they're JSON records in
+[src/data/cards/](src/data/cards/), one file per type, loaded by
+[cardLoader.ts](src/data/cardLoader.ts):
 
 ```json
 {
-  "id": "beast_bear",
-  "name": "Orso Bruno",
+  "id": "beast_wolf",
+  "name": "Lupo Grigio",
   "type": "beast",
-  "attack": "3",
-  "defense": "4",
-  "modifiers": ["GUARD"]
+  "attack": "2",
+  "defense": "1",
+  "modifiers": ["FIRST_STRIKE"]
 }
 ```
 
-Il tipo (`beast`/`robot`) determina solo lo stile visivo della cornice
-([render/frames.ts](src/render/frames.ts)), non ha ancora un ruolo
-meccanico.
+Mana cost isn't stored on the card — it's derived automatically in
+[game/cost.ts](src/game/cost.ts) from attack/defense and modifier weights,
+so new cards are balanced consistently without hand-tuning a cost field.
 
-## Sviluppo
+Decks are simple ordered lists of card ids
+([src/data/decks/](src/data/decks/)), shuffled at the start of the match by
+[game/Deck.ts](src/game/Deck.ts).
+
+## Architecture
+
+```
+src/
+  types/card.ts        Card data shape and modifiers
+  data/
+    cards/*.json         Card set, data-driven (beast.json, robot.json)
+    decks/*.json         Deck lists (ordered card ids)
+    cardLoader.ts         Typed access to the card set
+  game/
+    CardInstance.ts       Runtime instance of a card (current atk/def, tapped, cost)
+    BoardState.ts          Pure board state: 4 lanes, health, slots
+    Deck.ts                 Shuffled draw pile
+    cost.ts                 Mana cost derivation
+    combat.ts               Combat resolution and modifier rules
+    ai.ts                   Opponent: reinforce / play / attack
+  board/
+    Board.ts              Pixi container laying out the 4 lanes and health text
+    Lane.ts                A single lane (row of slots) and its CardViews
+  hand/
+    HandView.ts           Player's hand of cards
+  render/
+    CardView.ts            Pixi rendering of a single card, incl. long-press gesture
+    cardAssets.ts           Art/frame/back asset discovery and preloading
+    frames.ts               Fallback programmatic frame style per card type
+    animations.ts            GSAP animation helpers (lunge, shake, fade, streak, popups)
+  app/Game.ts            Turn state machine; wires DOM HUD to Pixi board interactions
+  main.ts                 Entry point, mounts Game into #app
+```
+
+The board itself renders entirely on a **Pixi.js canvas**; the HUD (status
+text, mana, action buttons, event log) is HTML/CSS overlaid on top, defined
+in [index.html](index.html) and wired up from `Game.ts`.
+
+## Development
 
 ```bash
 npm install
-npm run dev       # server di sviluppo Vite su http://localhost:5173
-npm run build     # type-check + build di produzione
-npm run preview   # serve la build di produzione
+npm run dev       # Vite dev server
+npm run build     # type-check + production build
+npm run preview   # serve the production build
 ```
 
-Stack: TypeScript, [Vite](https://vite.dev/), [Pixi.js](https://pixijs.com/) v8.
+Stack: TypeScript, [Vite](https://vite.dev/), [Pixi.js](https://pixijs.com/) v8,
+[GSAP](https://gsap.com/) v3.
 
-## Stato attuale e limiti noti
+## Current state and known limitations
 
-Questo è un prototipo del solo loop di combattimento:
-
-- il tabellone di partenza è fisso (`populateDemoCards`), non c'è ancora
-  mazzo, mano, pescata o costo/risorsa per giocare le carte;
-- l'IA avversaria non valuta i trade, applica solo le regole di legalità;
-- solo due tipi di carta (bestia, robot) e cinque modificatori: il set di
-  dati è volutamente piccolo per validare il motore prima di espanderlo.
+- Only two card types (beast, robot) and five modifiers — the data set is
+  intentionally small to validate the engine before expanding it.
+- The AI opponent has no trade evaluation or lookahead: it plays cheapest
+  cards first and always attacks with everything untapped.
+- No persistence, matchmaking, or multiplayer — this is a local, single-tab
+  prototype (human vs AI only).
+- No sound design yet.

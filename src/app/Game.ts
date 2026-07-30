@@ -161,6 +161,7 @@ export class Game {
     this.activeSide = side;
     this.selectedAttackers = [];
     this.armedRangedAttacker = null;
+    this.clearArmedHand();
     this.backButton.style.display = "none";
     this.targetFaceButton.style.display = "none";
     this.untapSide(side);
@@ -220,6 +221,13 @@ export class Game {
     this.refreshBoardInteractivity();
   }
 
+  /** Annulla lo stato "carta in mano armata" e la sua anteprima fissata, se presenti. */
+  private clearArmedHand(): void {
+    this.armedHandIndex = null;
+    this.pinnedPreview = null;
+    this.hideCardPreview();
+  }
+
   private armRangedAttacker(row: RowKey, slot: number): void {
     const idx = this.selectedAttackers.findIndex((a) => a.row === row && a.slot === slot);
     if (idx >= 0) {
@@ -227,7 +235,7 @@ export class Game {
       this.refreshBoardInteractivity();
       return;
     }
-    this.armedHandIndex = null;
+    this.clearArmedHand();
     this.armedRangedAttacker = { row, slot };
     this.statusEl.textContent = "Scegli il bersaglio per l'attacco a distanza, oppure colpisci il volto";
     this.refreshBoardInteractivity();
@@ -279,9 +287,7 @@ export class Game {
     this.playerMana -= instance.cost;
     // Appena giocata: non può ancora attaccare, come una carta tappata.
     instance.tapped = true;
-    this.armedHandIndex = null;
-    this.pinnedPreview = null;
-    this.hideCardPreview();
+    this.clearArmedHand();
     this.updateHandDisplay();
     this.updateManaDisplay();
     this.isReplaying = true;
