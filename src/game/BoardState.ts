@@ -18,13 +18,15 @@ export function lanesOfSide(side: Side): RowKey[] {
   return side === "player" ? ["playerMelee", "playerRanged"] : ["opponentMelee", "opponentRanged"];
 }
 
+export const DEFAULT_STARTING_HEALTH = 20;
+
 export class BoardState {
   readonly slotCount: number;
   playerHealth: number;
   opponentHealth: number;
   readonly rows: Record<RowKey, (CardInstance | undefined)[]>;
 
-  constructor(slotCount = 4, startingHealth = 20) {
+  constructor(slotCount = 4, startingHealth = DEFAULT_STARTING_HEALTH) {
     this.slotCount = slotCount;
     this.playerHealth = startingHealth;
     this.opponentHealth = startingHealth;

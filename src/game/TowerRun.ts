@@ -6,6 +6,7 @@ export { MAX_DECK_SIZE };
 /** Stato che attraversa più piani della Scalata della Torre: punteggio e mazzo del giocatore, che evolve piano dopo piano. */
 export class TowerRun {
   score = 0;
+  floorsCleared = 0;
   deckIds: string[];
 
   /** Di default parte da un'istantanea del mazzo che il giocatore ha costruito: la run poi

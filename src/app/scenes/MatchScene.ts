@@ -30,6 +30,13 @@ const SLOT_COUNT = 4;
 const INITIAL_HAND_SIZE = 3;
 const HAND_MARGIN = 20;
 
+export interface MatchResult {
+  won: boolean;
+  playerHealth: number;
+  opponentHealth: number;
+  turnsTaken: number;
+}
+
 export interface MatchSceneConfig {
   /** Di default il mazzo che il giocatore ha costruito; usato dalla Scalata della Torre per passare il mazzo evoluto tra i piani. */
   playerDeckIds?: string[];
@@ -40,7 +47,7 @@ export interface MatchSceneConfig {
    * ricompensa o il game over con punteggio). Riceve anche il `SceneContext` di questa scena,
    * dato che il chiamante l'ha definito prima che esistesse.
    */
-  onMatchEnd?: (won: boolean, context: SceneContext) => void;
+  onMatchEnd?: (result: MatchResult, context: SceneContext) => void;
 }
 
 export class MatchScene implements Scene {
@@ -65,7 +72,7 @@ export class MatchScene implements Scene {
 
   private playerDeck: Deck;
   private enemyDeck: Deck;
-  private onMatchEnd?: (won: boolean, context: SceneContext) => void;
+  private onMatchEnd?: (result: MatchResult, context: SceneContext) => void;
   private playerHand: CardInstance[] = [];
   private enemyHand: CardInstance[] = [];
   private handView = new HandView();
@@ -532,7 +539,15 @@ export class MatchScene implements Scene {
       this.wireHandCard(i, null); // l'anteprima resta consultabile anche a partita finita
     }
     if (this.onMatchEnd) {
-      this.onMatchEnd(result === "Hai vinto!", this.context);
+      this.onMatchEnd(
+        {
+          won: result === "Hai vinto!",
+          playerHealth: this.state.playerHealth,
+          opponentHealth: this.state.opponentHealth,
+          turnsTaken: this.playerTurnsTaken,
+        },
+        this.context,
+      );
     } else {
       this.showGameOverModal(result);
     }

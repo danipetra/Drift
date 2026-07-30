@@ -1,7 +1,9 @@
 import { Container } from "pixi.js";
+import { recordRun } from "../../game/Leaderboard";
 import { TowerRun } from "../../game/TowerRun";
 import { OverlayPanel } from "../../render/OverlayPanel";
 import type { Scene, SceneContext } from "../SceneManager";
+import { LeaderboardScene } from "./LeaderboardScene";
 import { MainMenuScene } from "./MainMenuScene";
 import { createTowerFloorScene } from "./towerFlow";
 
@@ -20,14 +22,21 @@ export class TowerGameOverScene implements Scene {
     this.context = context;
     context.app.stage.addChild(this.container);
 
+    recordRun(this.run.score, this.run.floorsCleared);
+
     this.panel = new OverlayPanel({
       title: "Hai perso!",
-      subtitle: `Punteggio finale: ${this.run.score}`,
+      subtitle: `Punteggio finale: ${this.run.score} — ${this.run.floorsCleared} piani superati`,
       buttons: [
         {
           label: "Nuova Scalata",
           emphasis: "primary",
           onClick: () => context.goTo(() => createTowerFloorScene(new TowerRun())),
+        },
+        {
+          label: "Classifica",
+          emphasis: "secondary",
+          onClick: () => context.goTo(() => new LeaderboardScene()),
         },
         {
           label: "Menu Principale",

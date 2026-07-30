@@ -1,8 +1,11 @@
 import { Container, Graphics, Text } from "pixi.js";
 import type { Scene, SceneContext } from "../SceneManager";
 import { DeckBuilderScene } from "./DeckBuilderScene";
+import { LeaderboardScene } from "./LeaderboardScene";
 import { MatchScene } from "./MatchScene";
 import { startNewTowerRun } from "./towerFlow";
+
+const SECONDARY_LINK_GAP = 32;
 
 const TILE_WIDTH = 150;
 const TILE_HEIGHT = 210;
@@ -20,7 +23,7 @@ export class MainMenuScene implements Scene {
   private context!: SceneContext;
   private readonly container = new Container();
   private readonly titleText: Text;
-  private readonly deckLinkText: Text;
+  private readonly secondaryLinks: Text[] = [];
   private readonly tileViews: Container[] = [];
 
   constructor() {
@@ -28,14 +31,24 @@ export class MainMenuScene implements Scene {
       text: "DROWNING",
       style: { fontFamily: "sans-serif", fontSize: 40, fontWeight: "bold", fill: 0xd8d8d8, letterSpacing: 4 },
     });
-    this.deckLinkText = new Text({
-      text: "Il Tuo Mazzo",
+    this.container.addChild(this.titleText);
+
+    this.secondaryLinks.push(
+      this.createSecondaryLink("Il Tuo Mazzo", () => this.context.goTo(() => new DeckBuilderScene())),
+      this.createSecondaryLink("Classifica", () => this.context.goTo(() => new LeaderboardScene())),
+    );
+  }
+
+  private createSecondaryLink(label: string, onClick: () => void): Text {
+    const link = new Text({
+      text: label,
       style: { fontFamily: "sans-serif", fontSize: 14, fontWeight: "bold", fill: 0x4fc3f7 },
     });
-    this.deckLinkText.eventMode = "static";
-    this.deckLinkText.cursor = "pointer";
-    this.deckLinkText.on("pointertap", () => this.context.goTo(() => new DeckBuilderScene()));
-    this.container.addChild(this.titleText, this.deckLinkText);
+    link.eventMode = "static";
+    link.cursor = "pointer";
+    link.on("pointertap", onClick);
+    this.container.addChild(link);
+    return link;
   }
 
   mount(context: SceneContext): void {
@@ -144,9 +157,14 @@ export class MainMenuScene implements Scene {
       tile.position.set(startX + index * (TILE_WIDTH + TILE_GAP) * scale, tileY);
     });
 
-    this.deckLinkText.position.set(
-      (width - this.deckLinkText.width) / 2,
-      tileY + TILE_HEIGHT * scale + 28,
-    );
+    const linksWidth =
+      this.secondaryLinks.reduce((sum, link) => sum + link.width, 0) +
+      SECONDARY_LINK_GAP * (this.secondaryLinks.length - 1);
+    let linkX = (width - linksWidth) / 2;
+    const linkY = tileY + TILE_HEIGHT * scale + 28;
+    for (const link of this.secondaryLinks) {
+      link.position.set(linkX, linkY);
+      linkX += link.width + SECONDARY_LINK_GAP;
+    }
   };
 }
