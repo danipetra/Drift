@@ -1,6 +1,7 @@
 import { Container, Graphics, Text } from "pixi.js";
 import type { Scene, SceneContext } from "../SceneManager";
 import { MatchScene } from "./MatchScene";
+import { startNewTowerRun } from "./towerFlow";
 
 const TILE_WIDTH = 150;
 const TILE_HEIGHT = 210;
@@ -52,8 +53,9 @@ export class MainMenuScene implements Scene {
       },
       {
         title: "Scalata della Torre",
-        subtitle: "Prossimamente",
-        enabled: false,
+        subtitle: "Sali di piano in piano, il mazzo cresce con te",
+        enabled: true,
+        onClick: () => this.context.goTo(() => startNewTowerRun()),
       },
       {
         title: "???",

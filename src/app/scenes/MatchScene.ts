@@ -31,6 +31,19 @@ const SLOT_COUNT = 4;
 const INITIAL_HAND_SIZE = 3;
 const HAND_MARGIN = 20;
 
+export interface MatchSceneConfig {
+  /** Di default il mazzo iniziale standard del giocatore; usato dalla Scalata della Torre per passare il mazzo evoluto tra i piani. */
+  playerDeckIds?: string[];
+  enemyDeckIds?: string[];
+  /**
+   * Se presente, sostituisce il pannello di fine partita predefinito (Rivincita/Menu Principale):
+   * chi possiede questa scena decide cosa succede dopo (es. la Scalata della Torre mostra la
+   * ricompensa o il game over con punteggio). Riceve anche il `SceneContext` di questa scena,
+   * dato che il chiamante l'ha definito prima che esistesse.
+   */
+  onMatchEnd?: (won: boolean, context: SceneContext) => void;
+}
+
 export class MatchScene implements Scene {
   private context!: SceneContext;
   private app!: Application;
@@ -51,8 +64,9 @@ export class MatchScene implements Scene {
   /** Vero mentre un replay animato (combattimento o piazzamento) è in corso: blocca i click, non il long-press. */
   private isReplaying = false;
 
-  private playerDeck = new Deck(playerDeckIds as string[]);
+  private playerDeck: Deck;
   private enemyDeck: Deck;
+  private onMatchEnd?: (won: boolean, context: SceneContext) => void;
   private playerHand: CardInstance[] = [];
   private enemyHand: CardInstance[] = [];
   private handView = new HandView();
@@ -70,8 +84,10 @@ export class MatchScene implements Scene {
   private modalContainer = new Container();
   private activeModal: OverlayPanel | null = null;
 
-  constructor(enemyDeckIds: string[] = pickRandomEnemyDeckIds()) {
-    this.enemyDeck = new Deck(enemyDeckIds);
+  constructor(config: MatchSceneConfig = {}) {
+    this.playerDeck = new Deck(config.playerDeckIds ?? (playerDeckIds as string[]));
+    this.enemyDeck = new Deck(config.enemyDeckIds ?? pickRandomEnemyDeckIds());
+    this.onMatchEnd = config.onMatchEnd;
   }
 
   async mount(context: SceneContext): Promise<void> {
@@ -533,7 +549,11 @@ export class MatchScene implements Scene {
       this.handView.setOutline(i, null);
       this.wireHandCard(i, null); // l'anteprima resta consultabile anche a partita finita
     }
-    this.showGameOverModal(result);
+    if (this.onMatchEnd) {
+      this.onMatchEnd(result === "Hai vinto!", this.context);
+    } else {
+      this.showGameOverModal(result);
+    }
     return true;
   }
 
