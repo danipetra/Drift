@@ -27,4 +27,10 @@ export class Deck {
   draw(): CardData | undefined {
     return this.cards.pop();
   }
+
+  /** Aggiunge una carta in un punto casuale del mazzo (es. il modificatore Genera): non sarà quasi mai la prossima pescata. */
+  addCard(data: CardData): void {
+    const index = Math.floor(Math.random() * (this.cards.length + 1));
+    this.cards.splice(index, 0, data);
+  }
 }

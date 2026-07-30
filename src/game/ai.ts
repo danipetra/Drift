@@ -1,6 +1,7 @@
 import type { CardInstance } from "./CardInstance";
 import { lanesOfSide, type BoardState, type RowKey, type Side } from "./BoardState";
 import { canTargetWithRanged, type AttackDeclaration, type AttackTarget } from "./combat";
+import { Modifier } from "../types/card";
 
 /** Se lo slot melee di una colonna è vuoto e c'è una ranged in retrovia, la porta avanti. */
 export function aiReinforce(state: BoardState, side: Side): void {
@@ -50,7 +51,7 @@ export function aiPlayCards(state: BoardState, side: Side, hand: CardInstance[],
     if (card.cost > remainingMana) break; // le successive costano uguale o di più
 
     const target = emptySlots.shift()!;
-    card.tapped = true;
+    card.tapped = !card.hasModifier(Modifier.FirstStrike);
     remainingMana -= card.cost;
     played.push({ card, row: target.row, slot: target.slot });
 

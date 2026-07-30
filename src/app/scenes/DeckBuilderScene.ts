@@ -9,10 +9,10 @@ import type { Scene, SceneContext } from "../SceneManager";
 import type { CardData, CardType } from "../../types/card";
 import { MainMenuScene } from "./MainMenuScene";
 
-const CARD_SCALE = 0.4;
-const COLUMNS = 5;
+const CARD_SCALE = 0.55;
+const COLUMNS = 4;
 const GRID_GAP = 12;
-const TILE_CAPTION_HEIGHT = 20;
+const TILE_CAPTION_HEIGHT = 26;
 const CARD_TYPES = Object.keys(FRAME_STYLES) as CardType[];
 
 interface TabView {
@@ -180,9 +180,9 @@ export class DeckBuilderScene implements Scene {
 
     const label = new Text({
       text: caption,
-      style: { fontFamily: "sans-serif", fontSize: 11, fill: 0xb0bec5, align: "center", wordWrap: true, wordWrapWidth: CARD_WIDTH },
+      style: { fontFamily: "sans-serif", fontSize: 15, fontWeight: "bold", fill: 0xffe082, align: "center" },
     });
-    label.position.set((CARD_WIDTH - label.width) / 2, CARD_HEIGHT + 4);
+    label.position.set((CARD_WIDTH - label.width) / 2, CARD_HEIGHT + 6);
     tile.addChild(label);
 
     return tile;

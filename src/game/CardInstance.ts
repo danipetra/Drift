@@ -1,5 +1,4 @@
 import type { CardData, Modifier } from "../types/card";
-import { computeCardCost } from "./cost";
 
 let nextInstanceId = 0;
 
@@ -16,7 +15,7 @@ export class CardInstance {
   constructor(data: CardData) {
     this.instanceId = nextInstanceId++;
     this.data = data;
-    this.cost = computeCardCost(data);
+    this.cost = parseInt(data.cost, 10);
     this.currentAttack = parseInt(data.attack, 10);
     this.currentDefense = parseInt(data.defense, 10);
     this.maxDefense = this.currentDefense;

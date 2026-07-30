@@ -66,11 +66,23 @@ export function wouldKill(attacker: CardInstance, target: CardInstance): boolean
   return attacker.currentAttack >= target.currentDefense;
 }
 
-/** Bersaglio automatico di un attaccante melee (stessa colonna), o `undefined` se la colonna è vuota o l'attacco la scavalca. */
+/** Le colonne che un attaccante melee raggiunge: una sola, salvo Attacco Doppio (sx+dx, non il centro) e Triplo (sx+centro+dx). */
+export function meleeTargetColumns(attacker: CardInstance, slot: number, slotCount: number): number[] {
+  if (attacker.hasModifier(Modifier.TripleAttack)) {
+    return [slot - 1, slot, slot + 1].filter((s) => s >= 0 && s < slotCount);
+  }
+  if (attacker.hasModifier(Modifier.DoubleAttack)) {
+    return [slot - 1, slot + 1].filter((s) => s >= 0 && s < slotCount);
+  }
+  return [slot];
+}
+
+/** Bersaglio automatico di un attaccante melee in una data colonna, o `undefined` se vuota o scavalcata. */
 export function meleeTargetFor(
   state: BoardState,
   attackerRow: RowKey,
   attackerSlot: number,
+  targetSlot: number,
 ): { row: RowKey; slot: number; card: CardInstance } | undefined {
   const attacker = state.getCard(attackerRow, attackerSlot);
   if (!attacker) return undefined;
@@ -78,9 +90,9 @@ export function meleeTargetFor(
   const defenderSide: Side = sideOf(attackerRow) === "player" ? "opponent" : "player";
   const [defenderMeleeRow] = lanesOfSide(defenderSide);
 
-  const defender = state.getCard(defenderMeleeRow, attackerSlot);
+  const defender = state.getCard(defenderMeleeRow, targetSlot);
   if (!defender || meleeColumnEvades(attacker, defender)) return undefined;
-  return { row: defenderMeleeRow, slot: attackerSlot, card: defender };
+  return { row: defenderMeleeRow, slot: targetSlot, card: defender };
 }
 
 export function resolveCombat(state: BoardState, attackingSide: Side, attacks: AttackDeclaration[]): CombatEvent[] {
@@ -154,14 +166,18 @@ export function resolveCombat(state: BoardState, attackingSide: Side, attacks: A
     attackerCard.tapped = true;
     const attacker: Combatant = { card: attackerCard, ref: { row: decl.row, slot: decl.slot } };
 
-    const defenderCard = state.getCard(defenderMeleeRow, decl.slot);
-    if (!defenderCard || meleeColumnEvades(attackerCard, defenderCard)) {
-      dealFaceDamage(attackerCard, attacker.ref);
-    } else {
-      meleeDuels.push({
-        attacker,
-        defender: { card: defenderCard, ref: { row: defenderMeleeRow, slot: decl.slot } },
-      });
+    // Attacco Doppio/Triplo colpiscono più colonne: ognuna si risolve come un duello a sé.
+    const columns = meleeTargetColumns(attackerCard, decl.slot, state.slotCount);
+    for (const targetSlot of columns) {
+      const defenderCard = state.getCard(defenderMeleeRow, targetSlot);
+      if (!defenderCard || meleeColumnEvades(attackerCard, defenderCard)) {
+        dealFaceDamage(attackerCard, attacker.ref);
+      } else {
+        meleeDuels.push({
+          attacker,
+          defender: { card: defenderCard, ref: { row: defenderMeleeRow, slot: targetSlot } },
+        });
+      }
     }
   }
 

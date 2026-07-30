@@ -2,6 +2,7 @@ import gsap from "gsap";
 import { Application, Container, Graphics } from "pixi.js";
 import { Board } from "../../board/Board";
 import { Lane } from "../../board/Lane";
+import { getCardById } from "../../data/cardLoader";
 import { pickRandomEnemyDeckIds } from "../../data/enemyDecks";
 import { aiChooseAttackers, aiPlayCards, aiReinforce } from "../../game/ai";
 import { BoardState, laneRoleOf, lanesOfSide, sideOf, type RowKey, type Side } from "../../game/BoardState";
@@ -9,6 +10,7 @@ import { CardInstance } from "../../game/CardInstance";
 import {
   applyTurnRegeneration,
   canTargetWithRanged,
+  meleeTargetColumns,
   meleeTargetFor,
   resolveCombat,
   wouldKill,
@@ -24,6 +26,7 @@ import { preloadCardTextures } from "../../render/cardAssets";
 import { CARD_HEIGHT, CARD_WIDTH, CardView } from "../../render/CardView";
 import { OverlayPanel } from "../../render/OverlayPanel";
 import type { Scene, SceneContext } from "../SceneManager";
+import { Modifier } from "../../types/card";
 import { MainMenuScene } from "./MainMenuScene";
 
 const SLOT_COUNT = 4;
@@ -58,7 +61,6 @@ export class MatchScene implements Scene {
   private lanes!: Record<RowKey, Lane>;
   private actionButton!: HTMLButtonElement;
   private backButton!: HTMLButtonElement;
-  private targetFaceButton!: HTMLButtonElement;
   private statusEl!: HTMLDivElement;
   private logEl!: HTMLDivElement;
 
@@ -114,6 +116,10 @@ export class MatchScene implements Scene {
     this.board.setPlayerDeckCount(this.playerDeck.remaining);
     this.board.setOpponentDeckCount(this.enemyDeck.remaining);
     this.app.stage.addChild(this.handView);
+    // Solo visivo (anteprime, numeri di danno, tracce ranged, carte in volo): non deve mai
+    // intercettare i click destinati al tabellone sotto, altrimenti un'anteprima fissata a
+    // sinistra blocca il piazzamento nella colonna sinistra.
+    this.overlayContainer.eventMode = "none";
     this.app.stage.addChild(this.overlayContainer);
     this.app.stage.addChild(this.modalContainer);
 
@@ -164,7 +170,6 @@ export class MatchScene implements Scene {
         </div>
         <div id="button-row">
           <button id="back-button" type="button" style="display: none">Annulla</button>
-          <button id="target-face-button" type="button" style="display: none">Colpisci il volto</button>
           <button id="action-button" type="button">Attacca</button>
         </div>
       </div>
@@ -172,7 +177,6 @@ export class MatchScene implements Scene {
     `;
     this.actionButton = hudRoot.querySelector<HTMLButtonElement>("#action-button")!;
     this.backButton = hudRoot.querySelector<HTMLButtonElement>("#back-button")!;
-    this.targetFaceButton = hudRoot.querySelector<HTMLButtonElement>("#target-face-button")!;
     this.statusEl = hudRoot.querySelector<HTMLDivElement>("#status")!;
     this.manaEl = hudRoot.querySelector<HTMLDivElement>("#mana")!;
     this.logEl = hudRoot.querySelector<HTMLDivElement>("#log")!;
@@ -233,9 +237,9 @@ export class MatchScene implements Scene {
     this.armedRangedAttacker = null;
     this.clearArmedHand();
     this.backButton.style.display = "none";
-    this.targetFaceButton.style.display = "none";
     this.untapSide(side);
     applyTurnRegeneration(this.state, side);
+    this.applyTurnSpawns(side);
     this.syncBoardView();
 
     if (side === "player") {
@@ -358,8 +362,9 @@ export class MatchScene implements Scene {
 
     this.playerHand.splice(this.armedHandIndex, 1);
     this.playerMana -= instance.cost;
-    // Appena giocata: non può ancora attaccare, come una carta tappata.
-    instance.tapped = true;
+    // Appena giocata non può ancora attaccare, come una carta tappata — a meno che non abbia
+    // Attacco rapido, che le permette di agire nello stesso turno in cui viene schierata.
+    instance.tapped = !instance.hasModifier(Modifier.FirstStrike);
     this.clearArmedHand();
     this.updateHandDisplay();
     this.updateManaDisplay();
@@ -417,6 +422,21 @@ export class MatchScene implements Scene {
         this.lanes[row].setTapped(slot, false);
       }
     }
+  }
+
+  /** A inizio turno: ogni carta con Genera aggiunge una copia della carta indicata al mazzo del suo proprietario. */
+  private applyTurnSpawns(side: Side): void {
+    const deck = side === "player" ? this.playerDeck : this.enemyDeck;
+    for (const row of lanesOfSide(side)) {
+      for (let slot = 0; slot < this.state.slotCount; slot++) {
+        const card = this.state.getCard(row, slot);
+        if (!card?.hasModifier(Modifier.Spawn) || !card.data.spawnCardId) continue;
+        const spawnData = getCardById(card.data.spawnCardId);
+        if (spawnData) deck.addCard(spawnData);
+      }
+    }
+    this.board.setPlayerDeckCount(this.playerDeck.remaining);
+    this.board.setOpponentDeckCount(this.enemyDeck.remaining);
   }
 
   // ---- Risoluzione ----
@@ -516,7 +536,6 @@ export class MatchScene implements Scene {
     this.gameOver = true;
     this.actionButton.disabled = true;
     this.backButton.style.display = "none";
-    this.targetFaceButton.style.display = "none";
     const result =
       this.state.playerHealth <= 0 && this.state.opponentHealth <= 0
         ? "Pareggio!"
@@ -642,7 +661,6 @@ export class MatchScene implements Scene {
       this.handView.setInteractive(i, null);
       this.handView.setOutline(i, null);
     }
-    this.targetFaceButton.style.display = "none";
     this.backButton.style.display = "none";
 
     // L'anteprima a pressione prolungata resta sempre disponibile su ogni carta in campo e in mano.
@@ -673,16 +691,20 @@ export class MatchScene implements Scene {
 
       for (const row of lanesOfSide("opponent")) {
         for (let slot = 0; slot < this.state.slotCount; slot++) {
-          if (!canTargetWithRanged(this.state, row, slot)) continue;
-          this.lanes[row].setOutline(slot, 0xff8a65);
-          this.wireCard(row, slot, () => this.assignRangedTarget({ type: "card", row, slot }));
           const target = this.state.getCard(row, slot);
-          if (armedCard && target) this.lanes[row].setDeathMarker(slot, wouldKill(armedCard, target));
+          if (target) {
+            if (!canTargetWithRanged(this.state, row, slot)) continue;
+            this.lanes[row].setOutline(slot, 0xff8a65);
+            this.wireCard(row, slot, () => this.assignRangedTarget({ type: "card", row, slot }));
+            if (armedCard) this.lanes[row].setDeathMarker(slot, wouldKill(armedCard, target));
+          } else {
+            // Corsia vuota: colpisce il volto direttamente, come selezionare una carta lì non ci fosse.
+            this.lanes[row].setPlaceholderHighlight(slot, 0xff8a65);
+            this.lanes[row].setPlaceholderInteractive(slot, () => this.assignRangedTarget({ type: "face" }));
+          }
         }
       }
 
-      this.targetFaceButton.style.display = "";
-      this.targetFaceButton.onclick = () => this.assignRangedTarget({ type: "face" });
       return;
     }
 
@@ -699,8 +721,10 @@ export class MatchScene implements Scene {
           if (laneRoleOf(row) === "melee") {
             this.wireCard(row, slot, () => this.toggleMeleeAttacker(row, slot));
             if (isSelected) {
-              const target = meleeTargetFor(this.state, row, slot);
-              if (target) this.lanes[target.row].setDeathMarker(target.slot, wouldKill(card, target.card));
+              for (const targetSlot of meleeTargetColumns(card, slot, this.state.slotCount)) {
+                const target = meleeTargetFor(this.state, row, slot, targetSlot);
+                if (target) this.lanes[target.row].setDeathMarker(target.slot, wouldKill(card, target.card));
+              }
             }
           } else {
             this.wireCard(row, slot, () => this.armRangedAttacker(row, slot));
