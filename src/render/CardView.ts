@@ -108,7 +108,7 @@ export class CardView extends Container {
 
     const defense = new Text({
       text: instance.defenseText,
-      style: { fontFamily: "sans-serif", fontSize: 18, fontWeight: "bold", fill: 0x81d4fa },
+      style: { fontFamily: "sans-serif", fontSize: 18, fontWeight: "bold", fill: instance.isDamaged ? 0xff5252 : 0x81d4fa },
     });
     defense.position.set(CARD_WIDTH - 10 - defense.width, CARD_HEIGHT - 26);
     this.addChild(defense);

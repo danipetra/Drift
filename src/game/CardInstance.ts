@@ -7,6 +7,8 @@ export class CardInstance {
   readonly instanceId: number;
   readonly data: CardData;
   readonly cost: number;
+  /** Difesa di base, per sapere se la carta è danneggiata: il danno subito è permanente, non si resetta mai da solo. */
+  readonly maxDefense: number;
   currentAttack: number;
   currentDefense: number;
   tapped = false;
@@ -17,6 +19,7 @@ export class CardInstance {
     this.cost = computeCardCost(data);
     this.currentAttack = parseInt(data.attack, 10);
     this.currentDefense = parseInt(data.defense, 10);
+    this.maxDefense = this.currentDefense;
   }
 
   hasModifier(modifier: Modifier): boolean {
@@ -25,6 +28,10 @@ export class CardInstance {
 
   get isDead(): boolean {
     return this.currentDefense <= 0;
+  }
+
+  get isDamaged(): boolean {
+    return this.currentDefense < this.maxDefense;
   }
 
   get attackText(): string {

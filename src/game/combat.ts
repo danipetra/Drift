@@ -36,6 +36,24 @@ export function canTargetWithRanged(state: BoardState, row: RowKey, slot: number
   return !!card && !card.isDead && !card.hasModifier(Modifier.Guard);
 }
 
+/**
+ * A inizio turno: Resilienza riparte sempre dalla difesa base (annulla il danno subito),
+ * Rigenerazione recupera 1 di difesa se danneggiata, senza superare il proprio tetto.
+ */
+export function applyTurnRegeneration(state: BoardState, side: Side): void {
+  for (const row of lanesOfSide(side)) {
+    for (let slot = 0; slot < state.slotCount; slot++) {
+      const card = state.getCard(row, slot);
+      if (!card) continue;
+      if (card.hasModifier(Modifier.Resilience)) {
+        card.currentDefense = card.maxDefense;
+      } else if (card.hasModifier(Modifier.Regeneration) && card.isDamaged) {
+        card.currentDefense = Math.min(card.maxDefense, card.currentDefense + 1);
+      }
+    }
+  }
+}
+
 function meleeColumnEvades(attacker: CardInstance, defender: CardInstance | undefined): boolean {
   if (attacker.hasModifier(Modifier.Stealth)) return true;
   if (attacker.hasModifier(Modifier.Flying) && !defender?.hasModifier(Modifier.Flying)) return true;

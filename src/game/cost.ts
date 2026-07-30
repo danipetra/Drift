@@ -6,6 +6,9 @@ const MODIFIER_COST: Record<Modifier, number> = {
   [Modifier.Deadly]: 2,
   [Modifier.Stealth]: 2,
   [Modifier.FirstStrike]: 1,
+  [Modifier.Regeneration]: 1,
+  // Annulla il danno subito ogni turno: il più forte dei modificatori difensivi, va pagato di conseguenza.
+  [Modifier.Resilience]: 3,
 };
 
 /** Costo approssimato: media di attacco/difesa (arrotondata per eccesso) + bonus per modificatore. */

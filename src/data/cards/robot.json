@@ -22,5 +22,13 @@
     "attack": "4",
     "defense": "3",
     "modifiers": ["DEADLY"]
+  },
+  {
+    "id": "robot_selfrepair",
+    "name": "Unità Autoriparante",
+    "type": "robot",
+    "attack": "2",
+    "defense": "2",
+    "modifiers": ["RESILIENCE"]
   }
 ]

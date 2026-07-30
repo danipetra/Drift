@@ -64,6 +64,10 @@ The game ends when either side's health (starting at 20) reaches 0.
 | `DEADLY` | Any damage this card deals is instantly lethal, regardless of amount. |
 | `GUARD` | This card cannot be chosen as a ranged target (it can still be attacked in melee via its column). |
 | `FIRST_STRIKE` | Deals its melee damage in an earlier sub-phase, before all other melee duels resolve. |
+| `REGENERATION` | Recovers 1 defense at the start of each of its owner's turns, if damaged — capped at its starting defense. |
+| `RESILIENCE` | Fully resets to its starting defense at the start of each of its owner's turns — damage never carries over. |
+
+Combat damage to defense is otherwise permanent: a card that survives a fight stays wounded turn after turn unless it has one of the two modifiers above. A wounded card's defense number renders in red instead of blue as a visual reminder.
 
 Modifiers are defined in [types/card.ts](src/types/card.ts) and interpreted
 by [game/combat.ts](src/game/combat.ts) — adding a new one only requires a

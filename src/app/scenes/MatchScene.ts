@@ -2,13 +2,13 @@ import gsap from "gsap";
 import { Application, Container, Graphics } from "pixi.js";
 import { Board } from "../../board/Board";
 import { Lane } from "../../board/Lane";
-import { getCardsByType } from "../../data/cardLoader";
 import { pickRandomEnemyDeckIds } from "../../data/enemyDecks";
 import playerDeckIds from "../../data/decks/playerDeck.json";
 import { aiChooseAttackers, aiPlayCards, aiReinforce } from "../../game/ai";
 import { BoardState, laneRoleOf, lanesOfSide, sideOf, type RowKey, type Side } from "../../game/BoardState";
 import { CardInstance } from "../../game/CardInstance";
 import {
+  applyTurnRegeneration,
   canTargetWithRanged,
   meleeTargetFor,
   resolveCombat,
@@ -23,7 +23,6 @@ import { dealCardFlight, fadeOut, lungeToward, popDamageNumber, rangedRecoil, sh
 import { preloadCardTextures } from "../../render/cardAssets";
 import { CARD_HEIGHT, CARD_WIDTH, CardView } from "../../render/CardView";
 import { OverlayPanel } from "../../render/OverlayPanel";
-import type { CardData } from "../../types/card";
 import type { Scene, SceneContext } from "../SceneManager";
 import { MainMenuScene } from "./MainMenuScene";
 
@@ -104,7 +103,6 @@ export class MatchScene implements Scene {
       playerRanged: this.board.playerRanged,
     };
 
-    this.populateDemoCards();
     this.updateHealthDisplay();
     this.board.setPlayerDeckCount(this.playerDeck.remaining);
     this.board.setOpponentDeckCount(this.enemyDeck.remaining);
@@ -173,24 +171,6 @@ export class MatchScene implements Scene {
     this.logEl = hudRoot.querySelector<HTMLDivElement>("#log")!;
   }
 
-  private placeCard(row: RowKey, slot: number, data: CardData): void {
-    const instance = new CardInstance(data);
-    this.state.setCard(row, slot, instance);
-    this.lanes[row].setCard(slot, instance);
-  }
-
-  private populateDemoCards(): void {
-    const beasts = getCardsByType("beast");
-    const robots = getCardsByType("robot");
-
-    this.placeCard("opponentRanged", 1, robots[1]);
-    this.placeCard("opponentMelee", 1, beasts[1]);
-    this.placeCard("opponentMelee", 2, robots[0]);
-    this.placeCard("playerMelee", 1, beasts[0]);
-    this.placeCard("playerRanged", 2, beasts[2]);
-    this.placeCard("playerRanged", 1, robots[2]);
-  }
-
   // ---- Mazzo e mano ----
 
   /** Vola dalla pila del giocatore fino al nuovo slot in mano, poi la mostra a riposo. */
@@ -248,6 +228,8 @@ export class MatchScene implements Scene {
     this.backButton.style.display = "none";
     this.targetFaceButton.style.display = "none";
     this.untapSide(side);
+    applyTurnRegeneration(this.state, side);
+    this.syncBoardView();
 
     if (side === "player") {
       this.playerTurnsTaken++;

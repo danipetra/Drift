@@ -22,5 +22,13 @@
     "attack": "3",
     "defense": "4",
     "modifiers": ["GUARD"]
+  },
+  {
+    "id": "beast_lizard",
+    "name": "Lucertola Rigenerante",
+    "type": "beast",
+    "attack": "2",
+    "defense": "5",
+    "modifiers": ["REGENERATION"]
   }
 ]
