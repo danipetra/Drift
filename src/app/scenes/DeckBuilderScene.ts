@@ -5,8 +5,8 @@ import { MAX_DECK_SIZE } from "../../game/deckRules";
 import { getPlayerProfile, PlayerProfile } from "../../game/PlayerProfile";
 import { CARD_HEIGHT, CARD_WIDTH, CardView } from "../../render/CardView";
 import { FRAME_STYLES } from "../../render/frames";
-import type { Scene, SceneContext } from "../SceneManager";
 import type { CardData, CardType } from "../../types/card";
+import { BaseScene } from "./BaseScene";
 import { MainMenuScene } from "./MainMenuScene";
 
 const CARD_SCALE = 0.55;
@@ -21,9 +21,7 @@ interface TabView {
 }
 
 /** Collezione sbloccata (fino a 3 copie a carta) + mazzo attuale (fino a 20 carte), editabile qui. */
-export class DeckBuilderScene implements Scene {
-  private context!: SceneContext;
-  private readonly container = new Container();
+export class DeckBuilderScene extends BaseScene {
   private readonly headerText: Text;
   private readonly tabViews: TabView[] = [];
   private readonly collectionSectionLabel: Text;
@@ -35,6 +33,7 @@ export class DeckBuilderScene implements Scene {
   private deckViews: Container[] = [];
 
   constructor() {
+    super();
     this.profile = getPlayerProfile();
     this.headerText = new Text({
       text: "Il Tuo Mazzo",
@@ -51,21 +50,10 @@ export class DeckBuilderScene implements Scene {
     this.container.addChild(this.headerText, this.collectionSectionLabel, this.deckSectionLabel);
   }
 
-  mount(context: SceneContext): void {
-    this.context = context;
-    context.app.stage.addChild(this.container);
+  protected onMount(): void {
     this.buildTabs();
     this.rebuildGrids();
-    this.buildHud(context.hudRoot);
-    context.app.renderer.on("resize", this.layout);
-    this.layout();
-  }
-
-  unmount(): void {
-    this.context.app.renderer.off("resize", this.layout);
-    this.context.app.stage.removeChild(this.container);
-    this.container.destroy({ children: true });
-    this.context.hudRoot.innerHTML = "";
+    this.buildHud(this.context.hudRoot);
   }
 
   private buildHud(hudRoot: HTMLElement): void {
@@ -220,7 +208,7 @@ export class DeckBuilderScene implements Scene {
     return startY + rows * tileHeight * scale + (rows - 1) * GRID_GAP * scale;
   }
 
-  private layout = (): void => {
+  protected layout(): void {
     const { width } = this.context.app.screen;
 
     this.headerText.position.set((width - this.headerText.width) / 2, 16);
@@ -243,5 +231,5 @@ export class DeckBuilderScene implements Scene {
     this.deckSectionLabel.position.set(16, y);
     y += this.deckSectionLabel.height + 6;
     this.layoutGrid(this.deckViews, y, width);
-  };
+  }
 }

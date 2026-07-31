@@ -1,9 +1,9 @@
-import { Container, Text } from "pixi.js";
+import { Text } from "pixi.js";
 import { getCardById } from "../../data/cardLoader";
 import { CardInstance } from "../../game/CardInstance";
 import { TowerRun } from "../../game/TowerRun";
 import { CARD_HEIGHT, CARD_WIDTH, CardView } from "../../render/CardView";
-import type { Scene, SceneContext } from "../SceneManager";
+import { BaseScene } from "./BaseScene";
 import { createTowerFloorScene } from "./towerFlow";
 
 const CARD_SCALE = 0.4;
@@ -11,9 +11,7 @@ const COLUMNS = 5;
 const GRID_GAP = 12;
 
 /** Mazzo già a 20 carte: scegli una delle carte attuali da scartare per fare posto alla nuova, o rifiuta. */
-export class TowerDiscardScene implements Scene {
-  private context!: SceneContext;
-  private readonly container = new Container();
+export class TowerDiscardScene extends BaseScene {
   private readonly titleText: Text;
   private readonly refuseText: Text;
   private readonly cardViews: CardView[] = [];
@@ -21,6 +19,7 @@ export class TowerDiscardScene implements Scene {
   private readonly incomingCardId: string;
 
   constructor(run: TowerRun, incomingCardId: string) {
+    super();
     this.run = run;
     this.incomingCardId = incomingCardId;
     this.titleText = new Text({
@@ -42,21 +41,11 @@ export class TowerDiscardScene implements Scene {
     this.container.addChild(this.titleText, this.refuseText);
   }
 
-  mount(context: SceneContext): void {
-    this.context = context;
-    context.app.stage.addChild(this.container);
+  protected onMount(): void {
     this.buildGrid();
     this.refuseText.eventMode = "static";
     this.refuseText.cursor = "pointer";
     this.refuseText.on("pointertap", () => this.goToNextFloor());
-    context.app.renderer.on("resize", this.layout);
-    this.layout();
-  }
-
-  unmount(): void {
-    this.context.app.renderer.off("resize", this.layout);
-    this.context.app.stage.removeChild(this.container);
-    this.container.destroy({ children: true });
   }
 
   private buildGrid(): void {
@@ -80,7 +69,7 @@ export class TowerDiscardScene implements Scene {
     this.context.goTo(() => createTowerFloorScene(this.run));
   }
 
-  private layout = (): void => {
+  protected layout(): void {
     const { width } = this.context.app.screen;
     this.titleText.position.set((width - this.titleText.width) / 2, 20);
 
@@ -104,5 +93,5 @@ export class TowerDiscardScene implements Scene {
 
     const gridHeight = rows * cardHeight * scale + Math.max(0, rows - 1) * GRID_GAP * scale;
     this.refuseText.position.set((width - this.refuseText.width) / 2, startY + gridHeight + 24);
-  };
+  }
 }

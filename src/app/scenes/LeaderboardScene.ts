@@ -1,18 +1,17 @@
-import { Container, Text } from "pixi.js";
+import { Text } from "pixi.js";
 import { getLeaderboard } from "../../game/Leaderboard";
-import type { Scene, SceneContext } from "../SceneManager";
+import { BaseScene } from "./BaseScene";
 import { MainMenuScene } from "./MainMenuScene";
 
 const ROW_GAP = 8;
 
 /** Classifica locale delle run della Scalata della Torre, in ordine di punteggio. */
-export class LeaderboardScene implements Scene {
-  private context!: SceneContext;
-  private readonly container = new Container();
+export class LeaderboardScene extends BaseScene {
   private readonly titleText: Text;
   private readonly rowTexts: Text[] = [];
 
   constructor() {
+    super();
     this.titleText = new Text({
       text: "Classifica",
       style: { fontFamily: "sans-serif", fontSize: 28, fontWeight: "bold", fill: 0xffffff, align: "center" },
@@ -20,20 +19,9 @@ export class LeaderboardScene implements Scene {
     this.container.addChild(this.titleText);
   }
 
-  mount(context: SceneContext): void {
-    this.context = context;
-    context.app.stage.addChild(this.container);
+  protected onMount(): void {
     this.buildRows();
-    this.buildHud(context.hudRoot);
-    context.app.renderer.on("resize", this.layout);
-    this.layout();
-  }
-
-  unmount(): void {
-    this.context.app.renderer.off("resize", this.layout);
-    this.context.app.stage.removeChild(this.container);
-    this.container.destroy({ children: true });
-    this.context.hudRoot.innerHTML = "";
+    this.buildHud(this.context.hudRoot);
   }
 
   private buildHud(hudRoot: HTMLElement): void {
@@ -79,7 +67,7 @@ export class LeaderboardScene implements Scene {
     });
   }
 
-  private layout = (): void => {
+  protected layout(): void {
     const { width, height } = this.context.app.screen;
 
     this.titleText.position.set((width - this.titleText.width) / 2, height * 0.12);
@@ -89,5 +77,5 @@ export class LeaderboardScene implements Scene {
       row.position.set((width - row.width) / 2, y);
       y += row.height + ROW_GAP;
     }
-  };
+  }
 }

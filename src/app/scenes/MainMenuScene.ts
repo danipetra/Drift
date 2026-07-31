@@ -1,5 +1,5 @@
 import { Container, Graphics, Text } from "pixi.js";
-import type { Scene, SceneContext } from "../SceneManager";
+import { BaseScene } from "./BaseScene";
 import { DeckBuilderScene } from "./DeckBuilderScene";
 import { LeaderboardScene } from "./LeaderboardScene";
 import { MatchScene } from "./MatchScene";
@@ -19,14 +19,13 @@ interface TileConfig {
 }
 
 /** Schermata iniziale: titolo + 3 carte-bottone affiancate, una per modalità di gioco. */
-export class MainMenuScene implements Scene {
-  private context!: SceneContext;
-  private readonly container = new Container();
+export class MainMenuScene extends BaseScene {
   private readonly titleText: Text;
   private readonly secondaryLinks: Text[] = [];
   private readonly tileViews: Container[] = [];
 
   constructor() {
+    super();
     this.titleText = new Text({
       text: "DROWNING",
       style: { fontFamily: "sans-serif", fontSize: 40, fontWeight: "bold", fill: 0xd8d8d8, letterSpacing: 4 },
@@ -51,18 +50,8 @@ export class MainMenuScene implements Scene {
     return link;
   }
 
-  mount(context: SceneContext): void {
-    this.context = context;
-    context.app.stage.addChild(this.container);
+  protected onMount(): void {
     this.buildTiles();
-    context.app.renderer.on("resize", this.layout);
-    this.layout();
-  }
-
-  unmount(): void {
-    this.context.app.renderer.off("resize", this.layout);
-    this.context.app.stage.removeChild(this.container);
-    this.container.destroy({ children: true });
   }
 
   private buildTiles(): void {
@@ -139,7 +128,7 @@ export class MainMenuScene implements Scene {
     return tile;
   }
 
-  private layout = (): void => {
+  protected layout(): void {
     const { width, height } = this.context.app.screen;
 
     const titleScale = Math.min(1, (width * 0.9) / this.titleText.width);
@@ -166,5 +155,5 @@ export class MainMenuScene implements Scene {
       link.position.set(linkX, linkY);
       linkX += link.width + SECONDARY_LINK_GAP;
     }
-  };
+  }
 }
