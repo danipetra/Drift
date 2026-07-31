@@ -54,6 +54,18 @@ export function applyTurnRegeneration(state: BoardState, side: Side): void {
   }
 }
 
+/** Alla giocata: Potenziamento ottiene +1 attacco permanente per ogni copia già in campo (lato proprietario) della carta referenziata da `empowerCardId`. */
+export function applyEmpowermentOnPlay(state: BoardState, side: Side, card: CardInstance): void {
+  if (!card.hasModifier(Modifier.Empowerment) || !card.data.empowerCardId) return;
+  let count = 0;
+  for (const row of lanesOfSide(side)) {
+    for (let slot = 0; slot < state.slotCount; slot++) {
+      if (state.getCard(row, slot)?.data.id === card.data.empowerCardId) count++;
+    }
+  }
+  card.currentAttack += count;
+}
+
 function meleeColumnEvades(attacker: CardInstance, defender: CardInstance | undefined): boolean {
   if (attacker.hasModifier(Modifier.Stealth)) return true;
   if (attacker.hasModifier(Modifier.Flying) && !defender?.hasModifier(Modifier.Flying)) return true;

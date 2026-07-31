@@ -15,7 +15,8 @@
     "attack": "0",
     "defense": "2",
     "cost": "0",
-    "modifiers": ["EMPOWERMENT"] 
+    "modifiers": ["EMPOWERMENT"],
+    "empowerCardId": "beast_squirrel"
   },
   {
     "id": "beast_toad",
@@ -24,7 +25,7 @@
     "attack": "2",
     "defense": "2",
     "cost": "4",
-    "modifiers": [] 
+    "modifiers": []
   },
   {
     "id": "beast_bee",

@@ -66,6 +66,10 @@ The game ends when either side's health (starting at 20) reaches 0.
 | `FIRST_STRIKE` | Deals its melee damage in an earlier sub-phase, before all other melee duels resolve. |
 | `REGENERATION` | Recovers 1 defense at the start of each of its owner's turns, if damaged — capped at its starting defense. |
 | `RESILIENCE` | Fully resets to its starting defense at the start of each of its owner's turns — damage never carries over. |
+| `SPAWN` | At the start of each of its owner's turns, adds a copy of `spawnCardId` to that player's deck. |
+| `DOUBLE_ATTACK` | A melee attack from this card hits both neighboring columns (not the one directly across). |
+| `TRIPLE_ATTACK` | A melee attack from this card hits its own column plus both neighbors. |
+| `EMPOWERMENT` | When played, gains +1 attack (permanently) for each copy of `empowerCardId` already on its owner's board. |
 
 Combat damage to defense is otherwise permanent: a card that survives a fight stays wounded turn after turn unless it has one of the two modifiers above. A wounded card's defense number renders in red instead of blue as a visual reminder.
 
@@ -154,13 +158,13 @@ Cards have no per-card code: they're JSON records in
   "type": "beast",
   "attack": "2",
   "defense": "1",
+  "cost": "3",
   "modifiers": ["FIRST_STRIKE"]
 }
 ```
 
-Mana cost isn't stored on the card — it's derived automatically in
-[game/cost.ts](src/game/cost.ts) from attack/defense and modifier weights,
-so new cards are balanced consistently without hand-tuning a cost field.
+Mana cost is authored by hand per card (`cost` field) rather than derived
+from stats, so balance stays under direct control as the card pool grows.
 
 Decks are simple ordered lists of card ids
 ([src/data/decks/](src/data/decks/)), shuffled at the start of the match by
@@ -179,7 +183,6 @@ src/
     CardInstance.ts       Runtime instance of a card (current atk/def, tapped, cost)
     BoardState.ts          Pure board state: 4 lanes, health, slots
     Deck.ts                 Shuffled draw pile
-    cost.ts                 Mana cost derivation
     combat.ts               Combat resolution and modifier rules
     ai.ts                   Opponent: reinforce / play / attack
   board/
@@ -192,9 +195,16 @@ src/
     cardAssets.ts           Art/frame/back asset discovery and preloading
     frames.ts               Fallback programmatic frame style per card type
     animations.ts            GSAP animation helpers (lunge, shake, fade, streak, popups)
-  app/Game.ts            Turn state machine; wires DOM HUD to Pixi board interactions
-  main.ts                 Entry point, mounts Game into #app
+  app/
+    SceneManager.ts        Owns the Pixi Application; mounts/unmounts scenes
+    scenes/*                 One class per screen (menu, match, deck builder, tower run, leaderboard, ...)
+  main.ts                 Entry point, wires SceneManager to #app
 ```
+
+The tree above covers the core engine; it doesn't enumerate every scene or
+the Tower Climb / profile / leaderboard modules (`game/TowerRun.ts`,
+`game/PlayerProfile.ts`, `game/Leaderboard.ts`, `app/scenes/*.ts`) — see
+those files directly for the current game-mode layer.
 
 The board itself renders entirely on a **Pixi.js canvas**; the HUD (status
 text, mana, action buttons, event log) is HTML/CSS overlaid on top, defined
@@ -214,8 +224,8 @@ Stack: TypeScript, [Vite](https://vite.dev/), [Pixi.js](https://pixijs.com/) v8,
 
 ## Current state and known limitations
 
-- Only two card types (beast, robot) and five modifiers — the data set is
-  intentionally small to validate the engine before expanding it.
+- Only two card types (beast, robot) — the data set is intentionally small
+  to validate the engine before expanding it.
 - The AI opponent has no trade evaluation or lookahead: it plays cheapest
   cards first and always attacks with everything untapped.
 - No persistence, matchmaking, or multiplayer — this is a local, single-tab

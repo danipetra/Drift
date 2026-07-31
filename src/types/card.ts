@@ -11,6 +11,7 @@ export const Modifier = {
   Spawn: "SPAWN",
   DoubleAttack: "DOUBLE_ATTACK",
   TripleAttack: "TRIPLE_ATTACK",
+  Empowerment: "EMPOWERMENT",
 } as const;
 
 export type Modifier = (typeof Modifier)[keyof typeof Modifier];
@@ -26,6 +27,7 @@ export const MODIFIER_LABELS: Record<Modifier, string> = {
   [Modifier.Spawn]: "Genera",
   [Modifier.DoubleAttack]: "Attacco doppio",
   [Modifier.TripleAttack]: "Attacco triplo",
+  [Modifier.Empowerment]: "Potenziamento",
 };
 
 export interface CardData {
@@ -39,4 +41,6 @@ export interface CardData {
   modifiers: Modifier[];
   /** Richiesto dal modificatore Genera: l'id della carta che questa copia in mazzo a ogni turno del proprietario. */
   spawnCardId?: string;
+  /** Richiesto dal modificatore Potenziamento: l'id della carta di cui, alla giocata, si contano le copie già in campo (lato proprietario), +1 attacco permanente ciascuna. */
+  empowerCardId?: string;
 }

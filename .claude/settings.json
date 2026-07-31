@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node act.js click 83 470)",
+      "Bash(node act.js wait 1500)",
+      "Bash(node act.js shot 02-match-start)",
+      "Bash(node act.js click 152 738)",
+      "Bash(node act.js wait 300)",
+      "Bash(node act.js shot 03-armed)",
+      "Bash(node act.js click 85 525)",
+      "Bash(node act.js wait 1200)",
+      "Bash(node act.js shot 04-placed1)",
+      "Bash(node act.js click 196 738)",
+      "Bash(node act.js wait 400)",
+      "Bash(node act.js click 187 525)",
+      "Bash(node act.js shot 05-placed2)",
+      "Bash(node act.js click 382 845)",
+      "Bash(node act.js wait 2500)",
+      "Bash(node act.js shot 06-after-turn1)",
+      "Bash(node act.js shot 07-after-turn2)",
+      "Bash(node act.js shot 08-after-turn3)",
+      "Bash(node act.js click 372 718)",
+      "Bash(node act.js shot 09-king-armed)"
+    ]
+  }
+}

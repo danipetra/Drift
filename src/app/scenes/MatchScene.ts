@@ -8,6 +8,7 @@ import { aiChooseAttackers, aiPlayCards, aiReinforce } from "../../game/ai";
 import { BoardState, laneRoleOf, lanesOfSide, sideOf, type RowKey, type Side } from "../../game/BoardState";
 import { CardInstance } from "../../game/CardInstance";
 import {
+  applyEmpowermentOnPlay,
   applyTurnRegeneration,
   canTargetWithRanged,
   meleeTargetColumns,
@@ -374,6 +375,7 @@ export class MatchScene implements Scene {
     if (source) {
       await this.dealCardToSlot(instance, row, slot, { ...source, scale: HAND_SCALE });
     } else {
+      applyEmpowermentOnPlay(this.state, sideOf(row), instance);
       this.state.setCard(row, slot, instance);
       this.lanes[row].setCard(slot, instance);
     }
@@ -398,6 +400,7 @@ export class MatchScene implements Scene {
 
     this.overlayContainer.removeChild(flying);
     flying.destroy();
+    applyEmpowermentOnPlay(this.state, sideOf(row), instance);
     this.state.setCard(row, slot, instance);
     this.lanes[row].setCard(slot, instance);
   }
