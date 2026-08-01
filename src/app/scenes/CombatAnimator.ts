@@ -7,12 +7,22 @@ import { fadeOut, lungeToward, popDamageNumber, rangedRecoil, shake, travelStrea
 
 /** Rigioca una sequenza di `CombatEvent` con animazione, un evento alla volta. */
 export class CombatAnimator {
+  private readonly lanes: Record<RowKey, Lane>;
+  private readonly board: Board;
+  private readonly overlayContainer: Container;
+  private readonly onEvent: (message: string) => void;
+
   constructor(
-    private readonly lanes: Record<RowKey, Lane>,
-    private readonly board: Board,
-    private readonly overlayContainer: Container,
-    private readonly onEvent: (message: string) => void,
-  ) {}
+    lanes: Record<RowKey, Lane>,
+    board: Board,
+    overlayContainer: Container,
+    onEvent: (message: string) => void,
+  ) {
+    this.lanes = lanes;
+    this.board = board;
+    this.overlayContainer = overlayContainer;
+    this.onEvent = onEvent;
+  }
 
   async playReplay(events: CombatEvent[]): Promise<void> {
     for (const event of events) {
