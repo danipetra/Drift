@@ -1,5 +1,23 @@
 [
   {
+    "id": "robot_worker",
+    "name": "Operaio Meccanico",
+    "type": "robot",
+    "attack": "0",
+    "defense": "2",
+    "cost": "0",
+    "modifiers": ["GUARD"]
+  },
+  {
+    "id": "robot_mosquito",
+    "name": "Mosca Meccanica",
+    "type": "robot",
+    "attack": "1",
+    "defense": "0",
+    "cost": "0",
+    "modifiers": []
+  },
+  {
     "id": "robot_sentry",
     "name": "Sentinella Automatica",
     "type": "robot",
@@ -21,10 +39,10 @@
     "id": "robot_breaker",
     "name": "Frantumatore Cingolato",
     "type": "robot",
-    "attack": "4",
+    "attack": "3",
     "defense": "3",
     "cost": "6",
-    "modifiers": ["DEADLY"]
+    "modifiers": []
   },
   {
     "id": "robot_selfrepair",
@@ -39,9 +57,9 @@
     "id": "robot_blade",
     "name": "Lama Roteante",
     "type": "robot",
-    "attack": "2",
+    "attack": "1",
     "defense": "2",
-    "cost": "4",
+    "cost": "3",
     "modifiers": ["DOUBLE_ATTACK"]
   },
   {
@@ -52,5 +70,24 @@
     "defense": "3",
     "cost": "7",
     "modifiers": ["TRIPLE_ATTACK"]
+  },
+  {
+    "id": "robot_mech",
+    "name": "Mech da Combattimento",
+    "type": "robot",
+    "attack": "2",
+    "defense": "4",
+    "cost": "8",
+    "modifiers": ["GUARD", "DOUBLE_ATTACK"]
+  },
+  {
+    "id": "robot_matrix",
+    "name": "Matrice di Controllo",
+    "type": "robot",
+    "attack": "7",
+    "defense": "7",
+    "cost": "8",
+    "modifiers": ["GUARD"]
   }
+
 ]
