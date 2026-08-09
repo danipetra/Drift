@@ -1,8 +1,9 @@
-import { Application, Container, Graphics } from "pixi.js";
+import { Application, Container } from "pixi.js";
 import type { Lane } from "../../board/Lane";
 import { lanesOfSide, laneRoleOf, sideOf, type BoardState, type RowKey, type Side } from "../../game/BoardState";
 import {
   canTargetWithRanged,
+  laneIsEmpty,
   meleeTargetColumns,
   meleeTargetFor,
   wouldKill,
@@ -11,7 +12,7 @@ import {
 } from "../../game/combat";
 import type { CardInstance } from "../../game/CardInstance";
 import type { HandView } from "../../hand/HandView";
-import { CARD_HEIGHT, CARD_WIDTH, CardView } from "../../render/CardView";
+import { createCardPreview } from "../../render/cardPreview";
 
 /** Tutto ciò che il controller legge dalla scena ospitante per decidere cosa evidenziare/rendere
  *  cliccabile; le azioni dell'utente tornano alla scena tramite queste callback, mai mutando `host` direttamente. */
@@ -69,24 +70,11 @@ export class BoardInteractionController {
   showPreview(card: CardInstance, side: Side): void {
     this.overlayContainer.removeChildren();
 
-    const scale = 1.8;
-    const width = CARD_WIDTH * scale;
-    const height = CARD_HEIGHT * scale;
-    const wrapper = new Container();
-
-    const backdrop = new Graphics()
-      .roundRect(-10, -10, width + 20, height + 20, 16)
-      .fill({ color: 0x000000, alpha: 0.6 });
-    wrapper.addChild(backdrop);
-
-    const view = new CardView(card);
-    view.scale.set(scale);
-    wrapper.addChild(view);
-
+    const wrapper = createCardPreview(card);
     const margin = 16;
     wrapper.position.set(
-      side === "player" ? margin : this.app.screen.width - width - 20 - margin,
-      Math.max(margin, (this.app.screen.height - height - 20) / 2),
+      side === "player" ? margin : this.app.screen.width - wrapper.width - margin,
+      Math.max(margin, (this.app.screen.height - wrapper.height) / 2),
     );
 
     this.overlayContainer.addChild(wrapper);
@@ -109,6 +97,8 @@ export class BoardInteractionController {
         host.lanes[row].setPlaceholderHighlight(slot, null);
         host.lanes[row].setDeathMarker(slot, false);
       }
+      host.lanes[row].setLaneInteractive(null);
+      host.lanes[row].setLaneHighlight(null);
     }
     for (let i = 0; i < host.playerHand.length; i++) {
       host.handView.setInteractive(i, null);
@@ -143,18 +133,19 @@ export class BoardInteractionController {
       this.wireCard(armed.row, armed.slot, () => host.cancelRangedArm());
 
       for (const row of lanesOfSide("opponent")) {
+        if (laneIsEmpty(host.state, row)) {
+          // Corsia interamente vuota: si seleziona come un unico bersaglio (colpisce il volto),
+          // non slot per slot — niente da colpire lì dentro, quindi niente scacchiera vuota da mostrare.
+          host.lanes[row].setLaneHighlight(0xff8a65);
+          host.lanes[row].setLaneInteractive(() => host.assignRangedTarget({ type: "face" }));
+          continue;
+        }
         for (let slot = 0; slot < host.state.slotCount; slot++) {
           const target = host.state.getCard(row, slot);
-          if (target) {
-            if (!canTargetWithRanged(host.state, row, slot)) continue;
-            host.lanes[row].setOutline(slot, 0xff8a65);
-            this.wireCard(row, slot, () => host.assignRangedTarget({ type: "card", row, slot }));
-            if (armedCard) host.lanes[row].setDeathMarker(slot, wouldKill(armedCard, target));
-          } else {
-            // Corsia vuota: colpisce il volto direttamente, come selezionare una carta lì non ci fosse.
-            host.lanes[row].setPlaceholderHighlight(slot, 0xff8a65);
-            host.lanes[row].setPlaceholderInteractive(slot, () => host.assignRangedTarget({ type: "face" }));
-          }
+          if (!target || !canTargetWithRanged(host.state, row, slot)) continue;
+          host.lanes[row].setOutline(slot, 0xff8a65);
+          this.wireCard(row, slot, () => host.assignRangedTarget({ type: "card", row, slot }));
+          if (armedCard) host.lanes[row].setDeathMarker(slot, wouldKill(armedCard, target));
         }
       }
 

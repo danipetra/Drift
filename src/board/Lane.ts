@@ -14,6 +14,7 @@ export class Lane extends Container {
   private background: Graphics;
   private cardViews: (CardView | undefined)[];
   private placeholders: Graphics[];
+  private readonly laneTarget: Graphics;
 
   constructor(owner: LaneOwner, role: LaneRole, slotCount = 4) {
     super();
@@ -25,6 +26,12 @@ export class Lane extends Container {
     this.background = new Graphics();
     this.addChild(this.background);
     this.drawBackground(this.laneWidth());
+
+    // Bersaglio ranged per l'intera corsia (usato solo quando è completamente vuota: si seleziona
+    // come un unico bersaglio invece che slot per slot). Stessa geometria dello sfondo della corsia.
+    this.laneTarget = new Graphics();
+    this.laneTarget.hitArea = new Rectangle(-8, -8, this.laneWidth() + 16, CARD_HEIGHT + 16);
+    this.addChild(this.laneTarget);
 
     this.placeholders = [];
     for (let slot = 0; slot < slotCount; slot++) {
@@ -118,6 +125,29 @@ export class Lane extends Container {
     } else {
       placeholder.eventMode = "none";
       placeholder.cursor = "default";
+    }
+  }
+
+  /** Evidenzia l'intera corsia come bersaglio ranged valido (solo quando è completamente vuota). */
+  setLaneHighlight(color: number | null): void {
+    this.laneTarget.clear();
+    if (color !== null) {
+      this.laneTarget
+        .roundRect(-8, -8, this.laneWidth() + 16, CARD_HEIGHT + 16, 8)
+        .fill({ color, alpha: 0.12 })
+        .stroke({ width: 3, color, alpha: 0.8 });
+    }
+  }
+
+  setLaneInteractive(onClick: (() => void) | null): void {
+    this.laneTarget.removeAllListeners("pointertap");
+    if (onClick) {
+      this.laneTarget.eventMode = "static";
+      this.laneTarget.cursor = "pointer";
+      this.laneTarget.on("pointertap", onClick);
+    } else {
+      this.laneTarget.eventMode = "none";
+      this.laneTarget.cursor = "default";
     }
   }
 }

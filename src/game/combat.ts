@@ -36,6 +36,14 @@ export function canTargetWithRanged(state: BoardState, row: RowKey, slot: number
   return !!card && !card.isDead && !card.hasModifier(Modifier.Guard);
 }
 
+/** Nessuna creatura schierata in tutta la corsia: bersaglio ranged valido per colpire il volto direttamente. */
+export function laneIsEmpty(state: BoardState, row: RowKey): boolean {
+  for (let slot = 0; slot < state.slotCount; slot++) {
+    if (state.getCard(row, slot)) return false;
+  }
+  return true;
+}
+
 /**
  * A inizio turno: Resilienza riparte sempre dalla difesa base (annulla il danno subito),
  * Rigenerazione recupera 1 di difesa se danneggiata, senza superare il proprio tetto.

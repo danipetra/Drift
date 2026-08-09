@@ -3,6 +3,7 @@ import { getCardById, getCardsByType } from "../../data/cardLoader";
 import { CardInstance } from "../../game/CardInstance";
 import { MAX_DECK_SIZE } from "../../game/deckRules";
 import { getPlayerProfile, PlayerProfile } from "../../game/PlayerProfile";
+import { createCardPreview } from "../../render/cardPreview";
 import { CARD_HEIGHT, CARD_WIDTH, CardView } from "../../render/CardView";
 import { FRAME_STYLES } from "../../render/frames";
 import type { CardData, CardType } from "../../types/card";
@@ -31,6 +32,9 @@ export class DeckBuilderScene extends BaseScene {
 
   private collectionViews: Container[] = [];
   private deckViews: Container[] = [];
+  // Solo visivo (anteprima a pressione prolungata): non deve intercettare i click destinati alle
+  // carte sotto, altrimenti bloccherebbe il tocco successivo su un'altra tessera.
+  private readonly overlayContainer = new Container();
 
   constructor() {
     super();
@@ -47,7 +51,8 @@ export class DeckBuilderScene extends BaseScene {
       text: "Nel mazzo",
       style: { fontFamily: "sans-serif", fontSize: 13, fill: 0xb0bec5 },
     });
-    this.container.addChild(this.headerText, this.collectionSectionLabel, this.deckSectionLabel);
+    this.overlayContainer.eventMode = "none";
+    this.container.addChild(this.headerText, this.collectionSectionLabel, this.deckSectionLabel, this.overlayContainer);
   }
 
   protected async onMount(): Promise<void> {
@@ -159,12 +164,19 @@ export class DeckBuilderScene extends BaseScene {
     }
 
     this.headerText.text = `Il Tuo Mazzo — ${this.profile.deck.length}/${MAX_DECK_SIZE} carte`;
+    // Le tessere appena create finiscono in cima allo stack: l'overlay dell'anteprima va rimesso
+    // sopra di loro, altrimenti da qui in poi resterebbe coperto.
+    this.container.addChild(this.overlayContainer);
   }
 
   private createTile(data: CardData, caption: string, onClick: () => void): Container {
     const tile = new Container();
     const cardView = new CardView(new CardInstance(data));
-    cardView.setInteractive(onClick);
+    cardView.setInteractive(
+      onClick,
+      () => this.showPreview(cardView.instance),
+      () => this.hidePreview(),
+    );
     tile.addChild(cardView);
 
     const label = new Text({
@@ -175,6 +187,19 @@ export class DeckBuilderScene extends BaseScene {
     tile.addChild(label);
 
     return tile;
+  }
+
+  /** Anteprima ingrandita a pressione prolungata, centrata sullo schermo (qui non c'è un "lato" come in partita). */
+  private showPreview(card: CardInstance): void {
+    this.overlayContainer.removeChildren();
+    const wrapper = createCardPreview(card);
+    const { width, height } = this.context.app.screen;
+    wrapper.position.set((width - wrapper.width) / 2, (height - wrapper.height) / 2);
+    this.overlayContainer.addChild(wrapper);
+  }
+
+  private hidePreview(): void {
+    this.overlayContainer.removeChildren();
   }
 
   private addCard(cardId: string): void {
