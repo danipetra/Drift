@@ -151,11 +151,12 @@ export class MatchScene extends BaseScene implements BoardInteractionHost {
   }
 
   protected onUnmount(): void {
-    // `popDamageNumber` è volutamente "fire-and-forget" (non atteso): se il
-    // giocatore chiude la partita mentre un numero di danno sta ancora
-    // animandosi, il tween GSAP continuerebbe a scrivere su un oggetto appena
-    // distrutto. Va ucciso esplicitamente prima che la base distrugga il container.
-    gsap.killTweensOf(this.overlayContainer.children);
+    // `popDamageNumber` (e altre animazioni minori come `punchHealth`) sono volutamente
+    // "fire-and-forget" in alcuni punti: se la scena cambia mentre una di queste sta ancora
+    // animandosi, il tween GSAP continuerebbe a scrivere su un oggetto appena distrutto.
+    // L'intera timeline globale va fermata prima che la base distrugga il container: questa è
+    // l'unica scena dell'app che usa GSAP per il gameplay, quindi non c'è nulla da preservare.
+    gsap.globalTimeline.clear();
   }
 
   /** Costruisce l'HUD (stato/mana/pulsanti/log) dentro il div fornito dalla scena, e ne salva i riferimenti. */

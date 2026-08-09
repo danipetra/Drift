@@ -1,44 +1,39 @@
 import { Text } from "pixi.js";
-import { getAllCards, getCardById } from "../../data/cardLoader";
+import { getCardById, registerCustomCard } from "../../data/cardLoader";
 import { CardInstance } from "../../game/CardInstance";
-import { getPlayerProfile } from "../../game/PlayerProfile";
-import { MAX_DECK_SIZE, TowerRun } from "../../game/TowerRun";
+import { TowerRun } from "../../game/TowerRun";
 import { resolveNode, type TowerNode } from "../../game/towerMap";
-import { pickRewardChoices } from "../../game/towerRewards";
 import { CARD_HEIGHT, CARD_WIDTH, CardView } from "../../render/CardView";
+import type { CardData } from "../../types/card";
 import { BaseScene } from "./BaseScene";
-import { TowerDiscardScene } from "./TowerDiscardScene";
 import { TowerMapScene } from "./TowerMapScene";
 
 const CARD_SCALE = 0.85;
 const CARD_GAP = 24;
 
-/** Nodo "nuova carta" della mappa: scegli 1 di 3 carte pescate dall'intero catalogo, o salta. */
-export class TowerRewardScene extends BaseScene {
-  private readonly titleText: Text;
-  private readonly subtitleText: Text;
-  private readonly skipText: Text;
-  private readonly cardViews: CardView[] = [];
+let customCardCounter = 0;
+
+/** Nodo "fusione": unisce due copie identiche presenti nel mazzo in una sola carta più forte. */
+export class TowerFusionScene extends BaseScene {
   private readonly run: TowerRun;
   private readonly node: TowerNode;
+  private readonly titleText: Text;
+  private readonly skipText: Text;
+  private readonly cardViews: CardView[] = [];
 
   constructor(run: TowerRun, node: TowerNode) {
     super();
     this.run = run;
     this.node = node;
     this.titleText = new Text({
-      text: "Nuova carta",
-      style: { fontFamily: "sans-serif", fontSize: 24, fontWeight: "bold", fill: 0xffffff, align: "center" },
-    });
-    this.subtitleText = new Text({
-      text: "Scegli una carta da aggiungere al mazzo",
-      style: { fontFamily: "sans-serif", fontSize: 14, fill: 0xb0bec5, align: "center" },
+      text: "Fusione: scegli quale coppia fondere",
+      style: { fontFamily: "sans-serif", fontSize: 20, fontWeight: "bold", fill: 0xffffff, align: "center" },
     });
     this.skipText = new Text({
-      text: "Salta ricompensa",
+      text: "Salta",
       style: { fontFamily: "sans-serif", fontSize: 13, fill: 0x8a919a, align: "center" },
     });
-    this.container.addChild(this.titleText, this.subtitleText, this.skipText);
+    this.container.addChild(this.titleText, this.skipText);
   }
 
   protected onMount(): void {
@@ -49,30 +44,42 @@ export class TowerRewardScene extends BaseScene {
   }
 
   private buildChoices(): void {
-    const choiceIds = pickRewardChoices(
-      getAllCards().map((card) => card.id),
-      3,
-    );
-    for (const id of choiceIds) {
+    const counts = new Map<string, number>();
+    for (const id of this.run.deckIds) counts.set(id, (counts.get(id) ?? 0) + 1);
+
+    for (const [id, count] of counts) {
+      if (count < 2) continue;
       const data = getCardById(id);
       if (!data) continue;
       const view = new CardView(new CardInstance(data));
       view.scale.set(CARD_SCALE);
-      view.setInteractive(() => this.chooseCard(id));
+      view.setInteractive(() => this.fuse(id));
       this.cardViews.push(view);
       this.container.addChild(view);
     }
   }
 
-  private chooseCard(cardId: string): void {
-    // Permanente e indipendente dalla run: la carta resta sbloccata anche se questa run finisce.
-    getPlayerProfile().unlock(cardId);
-    if (this.run.deckIds.length < MAX_DECK_SIZE) {
-      this.run.deckIds.push(cardId);
-      this.returnToMap();
-    } else {
-      this.context.goTo(() => new TowerDiscardScene(this.run, cardId, this.node));
+  private fuse(cardId: string): void {
+    const data = getCardById(cardId)!;
+    const fusedData: CardData = {
+      ...data,
+      id: `fuse:${customCardCounter++}`,
+      name: `Fusione: ${data.name}`,
+      attack: String(parseInt(data.attack, 10) * 2),
+      defense: String(parseInt(data.defense, 10) * 2),
+      cost: String(parseInt(data.cost, 10) + 1),
+    };
+    registerCustomCard(fusedData);
+
+    let removed = 0;
+    for (let i = this.run.deckIds.length - 1; i >= 0 && removed < 2; i--) {
+      if (this.run.deckIds[i] === cardId) {
+        this.run.deckIds.splice(i, 1);
+        removed++;
+      }
     }
+    this.run.deckIds.push(fusedData.id);
+    this.returnToMap();
   }
 
   private returnToMap(): void {
@@ -82,12 +89,7 @@ export class TowerRewardScene extends BaseScene {
 
   protected layout(): void {
     const { width, height } = this.context.app.screen;
-
     this.titleText.position.set((width - this.titleText.width) / 2, height * 0.12);
-    this.subtitleText.position.set(
-      (width - this.subtitleText.width) / 2,
-      height * 0.12 + this.titleText.height + 10,
-    );
 
     const cardWidth = CARD_WIDTH * CARD_SCALE;
     const cardHeight = CARD_HEIGHT * CARD_SCALE;

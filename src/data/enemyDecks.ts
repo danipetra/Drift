@@ -18,3 +18,21 @@ export function generateRandomEnemyDeck(size = 12): string[] {
   }
   return deck;
 }
+
+/** Nodo "scontro potenziato": stesso pool, mazzo più grande per una presenza sul campo maggiore. */
+export function generateEmpoweredEnemyDeck(size = 16): string[] {
+  return generateRandomEnemyDeck(size);
+}
+
+/** Nodo "boss": pesca solo dalle carte di costo più alto (fallback all'intero pool se ce ne sono ancora poche). */
+export function generateBossEnemyDeck(size = 14): string[] {
+  const strong = getAllCards()
+    .filter((card) => parseInt(card.cost, 10) >= 5)
+    .map((card) => card.id);
+  const pool = strong.length > 0 ? strong : getAllCards().map((card) => card.id);
+  const deck: string[] = [];
+  for (let i = 0; i < size; i++) {
+    deck.push(pool[Math.floor(Math.random() * pool.length)]);
+  }
+  return deck;
+}

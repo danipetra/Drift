@@ -21,10 +21,13 @@ export abstract class BaseScene implements Scene {
 
   unmount(): void {
     this.context.app.renderer.off("resize", this.handleResize);
+    // Prima della distruzione: `onUnmount()` (es. `gsap.killTweensOf` in `MatchScene`) deve poter
+    // ancora leggere riferimenti validi ai figli del container, altrimenti troverebbe un albero
+    // già svuotato e non ucciderebbe nulla.
+    this.onUnmount();
     this.context.app.stage.removeChild(this.container);
     this.container.destroy({ children: true });
     this.context.hudRoot.innerHTML = "";
-    this.onUnmount();
   }
 
   private readonly handleResize = (): void => this.layout();

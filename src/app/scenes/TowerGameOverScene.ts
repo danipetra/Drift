@@ -4,7 +4,7 @@ import { OverlayPanel } from "../../render/OverlayPanel";
 import { BaseScene } from "./BaseScene";
 import { LeaderboardScene } from "./LeaderboardScene";
 import { MainMenuScene } from "./MainMenuScene";
-import { createTowerFloorScene } from "./towerFlow";
+import { startNewTowerRun } from "./towerFlow";
 
 /** Fine di una run in torre (sconfitta o pareggio): punteggio finale + ricomincia/menu. */
 export class TowerGameOverScene extends BaseScene {
@@ -26,7 +26,7 @@ export class TowerGameOverScene extends BaseScene {
         {
           label: "Nuova Scalata",
           emphasis: "primary",
-          onClick: () => this.context.goTo(() => createTowerFloorScene(new TowerRun())),
+          onClick: () => this.context.goTo(() => startNewTowerRun()),
         },
         {
           label: "Classifica",

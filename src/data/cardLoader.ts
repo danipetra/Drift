@@ -15,6 +15,14 @@ export function getCardsByType(type: CardType): CardData[] {
   return CARD_SETS[type];
 }
 
+/** Carte sintetiche generate a runtime (sacrificio/fusione in torre): non fanno parte del
+ * catalogo statico, vivono e muoiono con la run, non vengono mai sbloccate permanentemente. */
+const customCards = new Map<string, CardData>();
+
+export function registerCustomCard(data: CardData): void {
+  customCards.set(data.id, data);
+}
+
 export function getCardById(id: string): CardData | undefined {
-  return getAllCards().find((card) => card.id === id);
+  return customCards.get(id) ?? getAllCards().find((card) => card.id === id);
 }
