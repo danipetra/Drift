@@ -1,8 +1,8 @@
 import playerDeckIds from "../data/decks/playerDeck.json";
 import { MAX_COPIES_PER_CARD, MAX_DECK_SIZE } from "./deckRules";
 
-const COLLECTION_KEY = "drowning.collection.v1";
-const DECK_KEY = "drowning.deck.v1";
+const COLLECTION_KEY = "drift.collection.v1";
+const DECK_KEY = "drift.deck.v1";
 
 interface SaveShape {
   counts: Record<string, number>;

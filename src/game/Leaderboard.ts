@@ -1,4 +1,4 @@
-const STORAGE_KEY = "drowning.leaderboard.v1";
+const STORAGE_KEY = "drift.leaderboard.v1";
 const MAX_ENTRIES = 10;
 
 export interface LeaderboardEntry {

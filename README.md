@@ -1,4 +1,4 @@
-# Drowning
+# Drift
 
 A 1v1 card game prototype built with **Pixi.js** and **TypeScript**, combining
 positional melee combat with free-target ranged attacks across a two-lane

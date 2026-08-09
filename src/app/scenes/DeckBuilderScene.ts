@@ -94,7 +94,7 @@ export class DeckBuilderScene extends BaseScene {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "drowning-save.json";
+    link.download = "drift-save.json";
     link.click();
     URL.revokeObjectURL(url);
   }

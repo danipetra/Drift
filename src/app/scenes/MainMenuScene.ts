@@ -27,7 +27,7 @@ export class MainMenuScene extends BaseScene {
   constructor() {
     super();
     this.titleText = new Text({
-      text: "DROWNING",
+      text: "DRIFT",
       style: { fontFamily: "sans-serif", fontSize: 40, fontWeight: "bold", fill: 0xd8d8d8, letterSpacing: 4 },
     });
     this.container.addChild(this.titleText);
