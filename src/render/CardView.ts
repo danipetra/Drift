@@ -6,9 +6,30 @@ import { FRAME_STYLES } from "./frames";
 
 export const CARD_WIDTH = 140;
 export const CARD_HEIGHT = 200;
-/** Rettangolo riservato all'illustrazione centrale, nelle stesse unità della carta (base 140×200). */
-export const ART_WINDOW = { x: 8, y: 58, width: 124, height: 86 };
 const LONG_PRESS_MS = 450;
+const CARD_CORNER_RADIUS = 10;
+
+/** Stessa sagoma arrotondata della cornice/dell'outline: senza maschera l'arte "cover" (rettangolare, angoli scuri per il vignette) sporgerebbe oltre gli angoli tondi mostrando pixel neri invece della trasparenza verso lo sfondo del lane. */
+function createCardMask(): Graphics {
+  return new Graphics().roundRect(0, 0, CARD_WIDTH, CARD_HEIGHT, CARD_CORNER_RADIUS).fill(0xffffff);
+}
+
+/**
+ * Le nuove cornici sono illustrazioni a piena carta con una finestra trasparente ritagliata al
+ * centro (forma libera, non un rettangolo): l'arte sotto viene "mascherata" gratis dalle parti
+ * opache della cornice sopra di essa, quindi qui basta coprire l'intera carta in "cover" (scala
+ * uniforme, nessuno stiracchiamento) invece di adattarsi a un rettangolo fisso — quel che sporge
+ * oltre la finestra viene semplicemente coperto dal bordo dipinto sopra.
+ */
+function fitArtCover(sprite: Sprite, texture: Texture): void {
+  const scale = Math.max(CARD_WIDTH / texture.width, CARD_HEIGHT / texture.height);
+  sprite.width = texture.width * scale;
+  sprite.height = texture.height * scale;
+  sprite.position.set((CARD_WIDTH - sprite.width) / 2, (CARD_HEIGHT - sprite.height) / 2);
+}
+
+/** Alone nero morbido dietro al testo: lo rende leggibile sopra l'illustrazione a piena carta senza pannelli opachi. */
+const TEXT_SHADOW = { color: 0x000000, blur: 3, distance: 0, alpha: 0.9 } as const;
 
 export class CardView extends Container {
   readonly instance: CardInstance;
@@ -25,11 +46,16 @@ export class CardView extends Container {
 
     const artPath = getCardArt(data.id);
     if (artPath) {
-      const art = new Sprite(Texture.from(artPath));
-      art.position.set(ART_WINDOW.x, ART_WINDOW.y);
-      art.width = ART_WINDOW.width;
-      art.height = ART_WINDOW.height;
-      this.addChild(art);
+      const texture = Texture.from(artPath);
+      const art = new Sprite(texture);
+      fitArtCover(art, texture);
+      // La maschera va aggiunta come figlio (non solo assegnata a `.mask`): da sola, senza un
+      // genitore proprio, la sua trasformazione non segue in modo affidabile la scala di `CardView`
+      // fuori dal caso semplice (es. nell'anteprima carta ingrandita 1.8x) — Pixi non ridisegna un
+      // figlio usato come maschera del suo stesso genitore, quindi non compare come rettangolo bianco.
+      const artMask = createCardMask();
+      art.mask = artMask;
+      this.addChild(art, artMask);
     }
 
     const framePath = getCardFrame(data.type);
@@ -40,21 +66,26 @@ export class CardView extends Container {
       this.addChild(frame);
     } else {
       const frame = new Graphics()
-        .roundRect(0, 0, CARD_WIDTH, CARD_HEIGHT, 10)
+        .roundRect(0, 0, CARD_WIDTH, CARD_HEIGHT, CARD_CORNER_RADIUS)
         .fill(style.fill)
         .stroke({ width: 3, color: style.stroke });
       this.addChild(frame);
     }
 
+    // Angolo in alto a sinistra: sulle nuove cornici è un ornamento (viticci/innesto), simmetrico
+    // al distintivo del costo sull'altro angolo — nessun pannello piatto sotto, quindi testo con
+    // alone invece di sfondo pieno.
     const typeLabel = new Text({
       text: style.label,
-      style: { fontFamily: "sans-serif", fontSize: 10, fill: style.stroke },
+      style: { fontFamily: "sans-serif", fontSize: 10, fill: style.stroke, dropShadow: TEXT_SHADOW },
     });
-    typeLabel.position.set(8, 6);
+    typeLabel.position.set(10, 9);
     this.addChild(typeLabel);
 
+    // Angolo in alto a destra: sulla cornice robot è proprio l'incasso circolare previsto per un
+    // gemma/distintivo; sulla cornice bestia è il nodo dei rovi, stesso posto funziona comunque.
     const costBadge = new Graphics()
-      .circle(CARD_WIDTH - 16, 16, 13)
+      .circle(CARD_WIDTH - 18, 22, 13)
       .fill({ color: 0x111318, alpha: 0.9 })
       .stroke({ width: 2, color: 0xffe082 });
     this.addChild(costBadge);
@@ -64,21 +95,26 @@ export class CardView extends Container {
       style: { fontFamily: "sans-serif", fontSize: 14, fontWeight: "bold", fill: 0xffe082 },
     });
     costText.anchor.set(0.5);
-    costText.position.set(CARD_WIDTH - 16, 16);
+    costText.position.set(CARD_WIDTH - 18, 22);
     this.addChild(costText);
 
+    // Nome ed eventuali modificatori vivono ora sopra l'illustrazione a piena carta, appena sopra
+    // la fascia inferiore dove la cornice si richiude nel gioiello a diamante: fuori da quella zona
+    // decorativa, ma ancora dentro la finestra "aperta" dell'illustrazione.
     const name = new Text({
       text: data.name,
       style: {
         fontFamily: "sans-serif",
-        fontSize: 14,
+        fontSize: 13,
         fontWeight: "bold",
         fill: 0xffffff,
+        align: "center",
         wordWrap: true,
-        wordWrapWidth: CARD_WIDTH - 16,
+        wordWrapWidth: CARD_WIDTH - 20,
+        dropShadow: TEXT_SHADOW,
       },
     });
-    name.position.set(8, 22);
+    name.position.set((CARD_WIDTH - name.width) / 2, 148);
     this.addChild(name);
 
     if (data.modifiers.length > 0) {
@@ -91,26 +127,36 @@ export class CardView extends Container {
           fontFamily: "sans-serif",
           fontSize: 9,
           fill: 0xd8d8d8,
+          align: "center",
           wordWrap: true,
-          wordWrapWidth: CARD_WIDTH - 16,
+          wordWrapWidth: CARD_WIDTH - 20,
+          dropShadow: TEXT_SHADOW,
         },
       });
-      modifiers.position.set(8, CARD_HEIGHT - 54);
+      modifiers.position.set((CARD_WIDTH - modifiers.width) / 2, name.position.y - modifiers.height - 2);
       this.addChild(modifiers);
     }
 
+    // Attacco/difesa negli angoli inferiori: sulla cornice robot cadono sugli incassi circolari,
+    // sulla bestia sul nodo di rovi — stessi angoli usati sopra per costo/tipo.
     const attack = new Text({
       text: instance.attackText,
-      style: { fontFamily: "sans-serif", fontSize: 18, fontWeight: "bold", fill: 0xff8a65 },
+      style: { fontFamily: "sans-serif", fontSize: 18, fontWeight: "bold", fill: 0xff8a65, dropShadow: TEXT_SHADOW },
     });
-    attack.position.set(10, CARD_HEIGHT - 26);
+    attack.position.set(14, CARD_HEIGHT - 30);
     this.addChild(attack);
 
     const defense = new Text({
       text: instance.defenseText,
-      style: { fontFamily: "sans-serif", fontSize: 18, fontWeight: "bold", fill: instance.isDamaged ? 0xff5252 : 0x81d4fa },
+      style: {
+        fontFamily: "sans-serif",
+        fontSize: 18,
+        fontWeight: "bold",
+        fill: instance.isDamaged ? 0xff5252 : 0x81d4fa,
+        dropShadow: TEXT_SHADOW,
+      },
     });
-    defense.position.set(CARD_WIDTH - 10 - defense.width, CARD_HEIGHT - 26);
+    defense.position.set(CARD_WIDTH - 14 - defense.width, CARD_HEIGHT - 30);
     this.addChild(defense);
 
     this.outline = new Graphics();

@@ -126,5 +126,23 @@
     "defense": "7",
     "cost": "7",
     "modifiers": []
+  },
+  {
+    "id": "beast_aki",
+    "name": "Aki",
+    "type": "beast",
+    "attack": "4",
+    "defense": "4",
+    "cost": "8",
+    "modifiers": ["REGENERATION", "FIRST_STRIKE", "FLYING"]
+  },
+  {
+    "id": "beast_trilly",
+    "name": "Trilly",
+    "type": "beast",
+    "attack": "3",
+    "defense": "1",
+    "cost": "7",
+    "modifiers": ["FLYING"]
   }
 ]

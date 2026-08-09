@@ -50,7 +50,8 @@ export class MainMenuScene extends BaseScene {
     return link;
   }
 
-  protected onMount(): void {
+  protected async onMount(): Promise<void> {
+    await this.setBackground("main");
     this.buildTiles();
   }
 

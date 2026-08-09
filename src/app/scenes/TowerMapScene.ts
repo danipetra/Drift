@@ -49,7 +49,8 @@ export class TowerMapScene extends BaseScene {
     this.container.addChild(this.edgesGraphics, this.headerText);
   }
 
-  protected onMount(): void {
+  protected async onMount(): Promise<void> {
+    await this.setBackground("board");
     this.buildNodes();
   }
 

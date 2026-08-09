@@ -18,7 +18,6 @@ import { Deck } from "../../game/Deck";
 import { getPlayerProfile } from "../../game/PlayerProfile";
 import { HandView, HAND_SCALE } from "../../hand/HandView";
 import { dealCardFlight } from "../../render/animations";
-import { preloadCardTextures } from "../../render/cardAssets";
 import { CARD_HEIGHT, CARD_WIDTH, CardView } from "../../render/CardView";
 import { OverlayPanel } from "../../render/OverlayPanel";
 import type { SceneContext } from "../SceneManager";
@@ -105,7 +104,7 @@ export class MatchScene extends BaseScene implements BoardInteractionHost {
 
   protected async onMount(): Promise<void> {
     this.app = this.context.app;
-    await preloadCardTextures();
+    await this.setBackground("match");
 
     this.board = new Board(SLOT_COUNT);
     this.container.addChild(this.board);

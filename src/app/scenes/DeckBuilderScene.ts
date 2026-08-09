@@ -50,7 +50,8 @@ export class DeckBuilderScene extends BaseScene {
     this.container.addChild(this.headerText, this.collectionSectionLabel, this.deckSectionLabel);
   }
 
-  protected onMount(): void {
+  protected async onMount(): Promise<void> {
+    await this.setBackground("deck-builder");
     this.buildTabs();
     this.rebuildGrids();
     this.buildHud(this.context.hudRoot);
