@@ -37,7 +37,7 @@ body {
   flex-direction: column;
   gap: 8px;
   padding: 10px 12px;
-  font-family: sans-serif;
+  font-family: "DotGothic16", sans-serif;
   background: #16181d;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }

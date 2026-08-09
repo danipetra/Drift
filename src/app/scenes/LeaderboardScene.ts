@@ -1,5 +1,6 @@
 import { Text } from "pixi.js";
 import { getLeaderboard } from "../../game/Leaderboard";
+import { FONT_BODY, FONT_DISPLAY } from "../../render/fonts";
 import { BaseScene } from "./BaseScene";
 import { MainMenuScene } from "./MainMenuScene";
 
@@ -14,7 +15,7 @@ export class LeaderboardScene extends BaseScene {
     super();
     this.titleText = new Text({
       text: "Classifica",
-      style: { fontFamily: "sans-serif", fontSize: 28, fontWeight: "bold", fill: 0xffffff, align: "center" },
+      style: { fontFamily: FONT_DISPLAY, fontSize: 28, fill: 0xffffff, align: "center" },
     });
     this.container.addChild(this.titleText);
   }
@@ -44,7 +45,7 @@ export class LeaderboardScene extends BaseScene {
     if (entries.length === 0) {
       const empty = new Text({
         text: "Nessuna scalata completata ancora.",
-        style: { fontFamily: "sans-serif", fontSize: 14, fill: 0x8a919a },
+        style: { fontFamily: FONT_BODY, fontSize: 14, fill: 0x8a919a },
       });
       this.rowTexts.push(empty);
       this.container.addChild(empty);
@@ -56,7 +57,7 @@ export class LeaderboardScene extends BaseScene {
       const row = new Text({
         text: `${index + 1}.  ${entry.score} punti  —  ${entry.floorsCleared} piani  —  ${date}`,
         style: {
-          fontFamily: "sans-serif",
+          fontFamily: FONT_BODY,
           fontSize: 15,
           fontWeight: index === 0 ? "bold" : "normal",
           fill: index === 0 ? 0xffe082 : 0xd8d8d8,

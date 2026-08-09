@@ -1,5 +1,6 @@
 import { Container, Graphics, Text } from "pixi.js";
 import { punchScale } from "../render/animations";
+import { FONT_BODY } from "../render/fonts";
 import { Lane } from "./Lane";
 
 const LANE_GAP = 20;
@@ -25,7 +26,7 @@ function createDeckPile(): DeckPile {
   }
   const countText = new Text({
     text: "0",
-    style: { fontFamily: "sans-serif", fontSize: 14, fontWeight: "bold", fill: 0xd8d8d8 },
+    style: { fontFamily: FONT_BODY, fontSize: 14, fontWeight: "bold", fill: 0xd8d8d8 },
   });
   countText.position.set(DECK_PILE_WIDTH + 8, DECK_PILE_HEIGHT / 2 - countText.height / 2 - 2);
   container.addChild(countText);
@@ -53,11 +54,11 @@ export class Board extends Container {
 
     this.opponentHealthText = new Text({
       text: "Vita: 20",
-      style: { fontFamily: "sans-serif", fontSize: 20, fontWeight: "bold", fill: 0xffffff },
+      style: { fontFamily: FONT_BODY, fontSize: 20, fontWeight: "bold", fill: 0xffffff },
     });
     this.playerHealthText = new Text({
       text: "Vita: 20",
-      style: { fontFamily: "sans-serif", fontSize: 20, fontWeight: "bold", fill: 0xffffff },
+      style: { fontFamily: FONT_BODY, fontSize: 20, fontWeight: "bold", fill: 0xffffff },
     });
 
     this.opponentDeckPile = createDeckPile();

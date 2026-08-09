@@ -5,6 +5,7 @@ import { MAX_DECK_SIZE } from "../../game/deckRules";
 import { getPlayerProfile, PlayerProfile } from "../../game/PlayerProfile";
 import { createCardPreview } from "../../render/cardPreview";
 import { CARD_HEIGHT, CARD_WIDTH, CardView } from "../../render/CardView";
+import { FONT_BODY, FONT_DISPLAY } from "../../render/fonts";
 import { FRAME_STYLES } from "../../render/frames";
 import type { CardData, CardType } from "../../types/card";
 import { BaseScene } from "./BaseScene";
@@ -41,15 +42,15 @@ export class DeckBuilderScene extends BaseScene {
     this.profile = getPlayerProfile();
     this.headerText = new Text({
       text: "Il Tuo Mazzo",
-      style: { fontFamily: "sans-serif", fontSize: 24, fontWeight: "bold", fill: 0xffffff, align: "center" },
+      style: { fontFamily: FONT_DISPLAY, fontSize: 24, fill: 0xffffff, align: "center" },
     });
     this.collectionSectionLabel = new Text({
       text: "La tua collezione",
-      style: { fontFamily: "sans-serif", fontSize: 13, fill: 0xb0bec5 },
+      style: { fontFamily: FONT_BODY, fontSize: 13, fill: 0xb0bec5 },
     });
     this.deckSectionLabel = new Text({
       text: "Nel mazzo",
-      style: { fontFamily: "sans-serif", fontSize: 13, fill: 0xb0bec5 },
+      style: { fontFamily: FONT_BODY, fontSize: 13, fill: 0xb0bec5 },
     });
     this.overlayContainer.eventMode = "none";
     this.container.addChild(this.headerText, this.collectionSectionLabel, this.deckSectionLabel, this.overlayContainer);
@@ -120,7 +121,7 @@ export class DeckBuilderScene extends BaseScene {
     for (const type of CARD_TYPES) {
       const view = new Text({
         text: FRAME_STYLES[type].label,
-        style: { fontFamily: "sans-serif", fontSize: 15, fontWeight: "bold", fill: 0x6b7280 },
+        style: { fontFamily: FONT_DISPLAY, fontSize: 15, fill: 0x6b7280 },
       });
       view.eventMode = "static";
       view.cursor = "pointer";
@@ -181,7 +182,7 @@ export class DeckBuilderScene extends BaseScene {
 
     const label = new Text({
       text: caption,
-      style: { fontFamily: "sans-serif", fontSize: 15, fontWeight: "bold", fill: 0xffe082, align: "center" },
+      style: { fontFamily: FONT_BODY, fontSize: 15, fontWeight: "bold", fill: 0xffe082, align: "center" },
     });
     label.position.set((CARD_WIDTH - label.width) / 2, CARD_HEIGHT + 6);
     tile.addChild(label);

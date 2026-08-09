@@ -5,6 +5,7 @@ import { TowerRun } from "../../game/TowerRun";
 import { resolveNode, type TowerNode } from "../../game/towerMap";
 import { CARD_HEIGHT, CARD_WIDTH, CardView } from "../../render/CardView";
 import { layoutCardGrid } from "../../render/cardGrid";
+import { FONT_BODY, FONT_DISPLAY } from "../../render/fonts";
 import { MODIFIER_LABELS, type CardData, type Modifier } from "../../types/card";
 import { BaseScene } from "./BaseScene";
 import { TowerMapScene } from "./TowerMapScene";
@@ -57,9 +58,8 @@ export class TowerSacrificeScene extends BaseScene {
     this.titleText = new Text({
       text: title,
       style: {
-        fontFamily: "sans-serif",
+        fontFamily: FONT_DISPLAY,
         fontSize: 18,
-        fontWeight: "bold",
         fill: 0xffffff,
         align: "center",
         wordWrap: true,
@@ -68,7 +68,7 @@ export class TowerSacrificeScene extends BaseScene {
     });
     this.skipText = new Text({
       text: "Salta",
-      style: { fontFamily: "sans-serif", fontSize: 14, fill: 0xff8a65, align: "center" },
+      style: { fontFamily: FONT_BODY, fontSize: 14, fill: 0xff8a65, align: "center" },
     });
     this.skipText.eventMode = "static";
     this.skipText.cursor = "pointer";
@@ -106,7 +106,7 @@ export class TowerSacrificeScene extends BaseScene {
     for (const modifier of modifiers) {
       const text = new Text({
         text: MODIFIER_LABELS[modifier],
-        style: { fontFamily: "sans-serif", fontSize: 16, fontWeight: "bold", fill: 0x4fc3f7, align: "center" },
+        style: { fontFamily: FONT_DISPLAY, fontSize: 16, fill: 0x4fc3f7, align: "center" },
       });
       text.eventMode = "static";
       text.cursor = "pointer";

@@ -1,0 +1,12 @@
+Jacquard 12, Jacquard 24, and DotGothic16 are distributed by Google Fonts
+under the SIL Open Font License, Version 1.1 (https://openfontlicense.org).
+Free for personal and commercial use, including embedding/self-hosting, with
+no attribution requirement.
+
+Files here are subsetted (Latin + Italian accented characters only) from the
+originals via Google Fonts' own css2 API, to keep bundle size down.
+
+Sources:
+- https://fonts.google.com/specimen/Jacquard+12
+- https://fonts.google.com/specimen/Jacquard+24
+- https://fonts.google.com/specimen/DotGothic16

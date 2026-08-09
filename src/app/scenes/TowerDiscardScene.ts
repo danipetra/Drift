@@ -5,6 +5,7 @@ import { TowerRun } from "../../game/TowerRun";
 import { resolveNode, type TowerNode } from "../../game/towerMap";
 import { CARD_HEIGHT, CARD_WIDTH, CardView } from "../../render/CardView";
 import { layoutCardGrid } from "../../render/cardGrid";
+import { FONT_BODY, FONT_DISPLAY } from "../../render/fonts";
 import { BaseScene } from "./BaseScene";
 import { TowerMapScene } from "./TowerMapScene";
 
@@ -29,9 +30,8 @@ export class TowerDiscardScene extends BaseScene {
     this.titleText = new Text({
       text: "Mazzo pieno: scegli una carta da scartare",
       style: {
-        fontFamily: "sans-serif",
+        fontFamily: FONT_DISPLAY,
         fontSize: 18,
-        fontWeight: "bold",
         fill: 0xffffff,
         align: "center",
         wordWrap: true,
@@ -40,7 +40,7 @@ export class TowerDiscardScene extends BaseScene {
     });
     this.refuseText = new Text({
       text: "Rifiuta (non cambiare il mazzo)",
-      style: { fontFamily: "sans-serif", fontSize: 14, fill: 0xff8a65, align: "center" },
+      style: { fontFamily: FONT_BODY, fontSize: 14, fill: 0xff8a65, align: "center" },
     });
     this.container.addChild(this.titleText, this.refuseText);
   }

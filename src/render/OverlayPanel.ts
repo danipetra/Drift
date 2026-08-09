@@ -1,4 +1,5 @@
 import { Container, Graphics, Text } from "pixi.js";
+import { FONT_BODY, FONT_DISPLAY } from "./fonts";
 
 export interface OverlayButtonConfig {
   label: string;
@@ -44,9 +45,8 @@ export class OverlayPanel extends Container {
     const title = new Text({
       text: config.title,
       style: {
-        fontFamily: "sans-serif",
+        fontFamily: FONT_DISPLAY,
         fontSize: 28,
-        fontWeight: "bold",
         fill: 0xffffff,
         align: "center",
         wordWrap: true,
@@ -61,7 +61,7 @@ export class OverlayPanel extends Container {
       const subtitle = new Text({
         text: config.subtitle,
         style: {
-          fontFamily: "sans-serif",
+          fontFamily: FONT_BODY,
           fontSize: 14,
           fill: 0xb0bec5,
           align: "center",
@@ -101,7 +101,7 @@ export class OverlayPanel extends Container {
 
     const label = new Text({
       text: config.label,
-      style: { fontFamily: "sans-serif", fontSize: 15, fontWeight: "bold", fill: isPrimary ? 0x101418 : 0xd8d8d8 },
+      style: { fontFamily: FONT_DISPLAY, fontSize: 15, fill: isPrimary ? 0x101418 : 0xd8d8d8 },
     });
     label.position.set((BUTTON_WIDTH - label.width) / 2, (BUTTON_HEIGHT - label.height) / 2);
     button.addChild(label);

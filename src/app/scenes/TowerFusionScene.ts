@@ -4,6 +4,7 @@ import { CardInstance } from "../../game/CardInstance";
 import { TowerRun } from "../../game/TowerRun";
 import { resolveNode, type TowerNode } from "../../game/towerMap";
 import { CARD_HEIGHT, CARD_WIDTH, CardView } from "../../render/CardView";
+import { FONT_BODY, FONT_DISPLAY } from "../../render/fonts";
 import type { CardData } from "../../types/card";
 import { BaseScene } from "./BaseScene";
 import { TowerMapScene } from "./TowerMapScene";
@@ -27,11 +28,11 @@ export class TowerFusionScene extends BaseScene {
     this.node = node;
     this.titleText = new Text({
       text: "Fusione: scegli quale coppia fondere",
-      style: { fontFamily: "sans-serif", fontSize: 20, fontWeight: "bold", fill: 0xffffff, align: "center" },
+      style: { fontFamily: FONT_DISPLAY, fontSize: 20, fill: 0xffffff, align: "center" },
     });
     this.skipText = new Text({
       text: "Salta",
-      style: { fontFamily: "sans-serif", fontSize: 13, fill: 0x8a919a, align: "center" },
+      style: { fontFamily: FONT_BODY, fontSize: 13, fill: 0x8a919a, align: "center" },
     });
     this.container.addChild(this.titleText, this.skipText);
   }

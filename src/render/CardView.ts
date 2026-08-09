@@ -2,6 +2,7 @@ import { Container, Graphics, Sprite, Text, Texture } from "pixi.js";
 import { MODIFIER_LABELS } from "../types/card";
 import type { CardInstance } from "../game/CardInstance";
 import { getCardArt, getCardFrame } from "./cardAssets";
+import { FONT_BODY, FONT_DISPLAY } from "./fonts";
 import { FRAME_STYLES } from "./frames";
 
 export const CARD_WIDTH = 140;
@@ -30,6 +31,14 @@ function fitArtCover(sprite: Sprite, texture: Texture): void {
 
 /** Alone nero morbido dietro al testo: lo rende leggibile sopra l'illustrazione a piena carta senza pannelli opachi. */
 const TEXT_SHADOW = { color: 0x000000, blur: 3, distance: 0, alpha: 0.9 } as const;
+
+/**
+ * Il testo di Pixi si rasterizza su un canvas alla sua dimensione nativa una volta sola alla
+ * creazione: `CardView` viene poi ingrandita fino a 1.8x nell'anteprima a pressione prolungata, e
+ * senza una risoluzione più alta quel bitmap sgranerebbe visibilmente. 2x copre quel caso con
+ * margine.
+ */
+const TEXT_RESOLUTION = 2;
 
 export class CardView extends Container {
   readonly instance: CardInstance;
@@ -77,7 +86,8 @@ export class CardView extends Container {
     // alone invece di sfondo pieno.
     const typeLabel = new Text({
       text: style.label,
-      style: { fontFamily: "sans-serif", fontSize: 10, fill: style.stroke, dropShadow: TEXT_SHADOW },
+      style: { fontFamily: FONT_BODY, fontSize: 10, fill: style.stroke, dropShadow: TEXT_SHADOW },
+      resolution: TEXT_RESOLUTION,
     });
     typeLabel.position.set(10, 9);
     this.addChild(typeLabel);
@@ -92,39 +102,28 @@ export class CardView extends Container {
 
     const costText = new Text({
       text: String(instance.cost),
-      style: { fontFamily: "sans-serif", fontSize: 14, fontWeight: "bold", fill: 0xffe082 },
+      style: { fontFamily: FONT_BODY, fontSize: 14, fontWeight: "bold", fill: 0xffe082 },
+      resolution: TEXT_RESOLUTION,
     });
     costText.anchor.set(0.5);
     costText.position.set(CARD_WIDTH - 18, 22);
     this.addChild(costText);
 
-    // Nome ed eventuali modificatori vivono ora sopra l'illustrazione a piena carta, appena sopra
-    // la fascia inferiore dove la cornice si richiude nel gioiello a diamante: fuori da quella zona
-    // decorativa, ma ancora dentro la finestra "aperta" dell'illustrazione.
-    const name = new Text({
-      text: data.name,
-      style: {
-        fontFamily: "sans-serif",
-        fontSize: 13,
-        fontWeight: "bold",
-        fill: 0xffffff,
-        align: "center",
-        wordWrap: true,
-        wordWrapWidth: CARD_WIDTH - 20,
-        dropShadow: TEXT_SHADOW,
-      },
-    });
-    name.position.set((CARD_WIDTH - name.width) / 2, 148);
-    this.addChild(name);
+    // Nome ed eventuali modificatori vivono sopra l'illustrazione a piena carta, appena sopra la
+    // fascia inferiore dove la cornice si richiude nel gioiello a diamante: fuori da quella zona
+    // decorativa, ma ancora dentro la finestra "aperta" dell'illustrazione. Il blocco resta
+    // ancorato dal basso (bordo inferiore fisso, appena sopra attacco/difesa): il nome sta sopra e
+    // i modificatori sotto, ordine di lettura naturale, e un nome andato a capo su due righe spinge
+    // verso l'alto invece di sovrapporsi alle statistiche.
+    const STACK_BOTTOM = 168;
 
+    let modifiers: Text | null = null;
     if (data.modifiers.length > 0) {
-      const modifiersText = data.modifiers
-        .map((modifier) => MODIFIER_LABELS[modifier])
-        .join(" · ");
-      const modifiers = new Text({
+      const modifiersText = data.modifiers.map((modifier) => MODIFIER_LABELS[modifier]).join(" · ");
+      modifiers = new Text({
         text: modifiersText,
         style: {
-          fontFamily: "sans-serif",
+          fontFamily: FONT_BODY,
           fontSize: 9,
           fill: 0xd8d8d8,
           align: "center",
@@ -132,16 +131,39 @@ export class CardView extends Container {
           wordWrapWidth: CARD_WIDTH - 20,
           dropShadow: TEXT_SHADOW,
         },
+        resolution: TEXT_RESOLUTION,
       });
-      modifiers.position.set((CARD_WIDTH - modifiers.width) / 2, name.position.y - modifiers.height - 2);
-      this.addChild(modifiers);
+    }
+
+    const name = new Text({
+      text: data.name,
+      style: {
+        fontFamily: FONT_DISPLAY,
+        fontSize: 13,
+        fill: 0xffffff,
+        align: "center",
+        wordWrap: true,
+        wordWrapWidth: CARD_WIDTH - 20,
+        dropShadow: TEXT_SHADOW,
+      },
+      resolution: TEXT_RESOLUTION,
+    });
+
+    if (modifiers) {
+      modifiers.position.set((CARD_WIDTH - modifiers.width) / 2, STACK_BOTTOM - modifiers.height);
+      name.position.set((CARD_WIDTH - name.width) / 2, modifiers.position.y - name.height - 2);
+      this.addChild(name, modifiers);
+    } else {
+      name.position.set((CARD_WIDTH - name.width) / 2, STACK_BOTTOM - name.height);
+      this.addChild(name);
     }
 
     // Attacco/difesa negli angoli inferiori: sulla cornice robot cadono sugli incassi circolari,
     // sulla bestia sul nodo di rovi — stessi angoli usati sopra per costo/tipo.
     const attack = new Text({
       text: instance.attackText,
-      style: { fontFamily: "sans-serif", fontSize: 18, fontWeight: "bold", fill: 0xff8a65, dropShadow: TEXT_SHADOW },
+      style: { fontFamily: FONT_BODY, fontSize: 18, fontWeight: "bold", fill: 0xff8a65, dropShadow: TEXT_SHADOW },
+      resolution: TEXT_RESOLUTION,
     });
     attack.position.set(14, CARD_HEIGHT - 30);
     this.addChild(attack);
@@ -149,12 +171,13 @@ export class CardView extends Container {
     const defense = new Text({
       text: instance.defenseText,
       style: {
-        fontFamily: "sans-serif",
+        fontFamily: FONT_BODY,
         fontSize: 18,
         fontWeight: "bold",
         fill: instance.isDamaged ? 0xff5252 : 0x81d4fa,
         dropShadow: TEXT_SHADOW,
       },
+      resolution: TEXT_RESOLUTION,
     });
     defense.position.set(CARD_WIDTH - 14 - defense.width, CARD_HEIGHT - 30);
     this.addChild(defense);
@@ -171,7 +194,8 @@ export class CardView extends Container {
     this.deathMarker.addChild(deathBackdrop);
     const deathText = new Text({
       text: "💀 KO",
-      style: { fontFamily: "sans-serif", fontSize: 20, fontWeight: "bold", fill: 0xff5252 },
+      style: { fontFamily: FONT_BODY, fontSize: 20, fontWeight: "bold", fill: 0xff5252 },
+      resolution: TEXT_RESOLUTION,
     });
     deathText.anchor.set(0.5);
     deathText.position.set(CARD_WIDTH / 2, CARD_HEIGHT / 2);

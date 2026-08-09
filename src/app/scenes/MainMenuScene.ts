@@ -1,4 +1,5 @@
 import { Container, Graphics, Text } from "pixi.js";
+import { FONT_BODY, FONT_DISPLAY, FONT_DISPLAY_LARGE } from "../../render/fonts";
 import { BaseScene } from "./BaseScene";
 import { DeckBuilderScene } from "./DeckBuilderScene";
 import { LeaderboardScene } from "./LeaderboardScene";
@@ -28,7 +29,7 @@ export class MainMenuScene extends BaseScene {
     super();
     this.titleText = new Text({
       text: "DRIFT",
-      style: { fontFamily: "sans-serif", fontSize: 40, fontWeight: "bold", fill: 0xd8d8d8, letterSpacing: 4 },
+      style: { fontFamily: FONT_DISPLAY_LARGE, fontSize: 40, fill: 0xd8d8d8, letterSpacing: 4 },
     });
     this.container.addChild(this.titleText);
 
@@ -41,7 +42,7 @@ export class MainMenuScene extends BaseScene {
   private createSecondaryLink(label: string, onClick: () => void): Text {
     const link = new Text({
       text: label,
-      style: { fontFamily: "sans-serif", fontSize: 14, fontWeight: "bold", fill: 0x4fc3f7 },
+      style: { fontFamily: FONT_DISPLAY, fontSize: 14, fill: 0x4fc3f7 },
     });
     link.eventMode = "static";
     link.cursor = "pointer";
@@ -94,9 +95,8 @@ export class MainMenuScene extends BaseScene {
     const title = new Text({
       text: config.title,
       style: {
-        fontFamily: "sans-serif",
+        fontFamily: FONT_DISPLAY,
         fontSize: 18,
-        fontWeight: "bold",
         fill: config.enabled ? 0xffffff : 0x6b7280,
         align: "center",
         wordWrap: true,
@@ -109,7 +109,7 @@ export class MainMenuScene extends BaseScene {
     const subtitle = new Text({
       text: config.subtitle,
       style: {
-        fontFamily: "sans-serif",
+        fontFamily: FONT_BODY,
         fontSize: 12,
         fill: config.enabled ? 0xb0bec5 : 0x565c63,
         align: "center",

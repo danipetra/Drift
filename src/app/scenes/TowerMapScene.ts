@@ -1,6 +1,7 @@
 import { Container, Graphics, Text } from "pixi.js";
 import { TowerRun } from "../../game/TowerRun";
 import type { TowerNode, TowerNodeType } from "../../game/towerMap";
+import { FONT_DISPLAY } from "../../render/fonts";
 import { BaseScene } from "./BaseScene";
 import { TowerFusionScene } from "./TowerFusionScene";
 import { TowerRewardScene } from "./TowerRewardScene";
@@ -44,7 +45,7 @@ export class TowerMapScene extends BaseScene {
     this.run = run;
     this.headerText = new Text({
       text: `Punteggio: ${run.score} — Piani superati: ${run.floorsCleared}`,
-      style: { fontFamily: "sans-serif", fontSize: 18, fontWeight: "bold", fill: 0xffffff, align: "center" },
+      style: { fontFamily: FONT_DISPLAY, fontSize: 18, fill: 0xffffff, align: "center" },
     });
     this.container.addChild(this.edgesGraphics, this.headerText);
   }
@@ -86,9 +87,8 @@ export class TowerMapScene extends BaseScene {
     const label = new Text({
       text: NODE_TYPE_LABELS[node.type],
       style: {
-        fontFamily: "sans-serif",
+        fontFamily: FONT_DISPLAY,
         fontSize: 13,
-        fontWeight: "bold",
         fill: palette.label,
         align: "center",
         wordWrap: true,

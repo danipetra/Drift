@@ -1,5 +1,6 @@
 import gsap from "gsap";
 import { Container, Graphics, Text } from "pixi.js";
+import { FONT_BODY } from "./fonts";
 
 /** GSAP è thenable ma il tipo del suo `.then` non collabora bene con `Promise<void>`: si avvolge a mano. */
 function awaitTimeline(tl: gsap.core.Timeline): Promise<void> {
@@ -100,7 +101,7 @@ export function popDamageNumber(
   const text = new Text({
     text: `-${amount}`,
     style: {
-      fontFamily: "sans-serif",
+      fontFamily: FONT_BODY,
       fontSize: 26,
       fontWeight: "bold",
       fill: color,

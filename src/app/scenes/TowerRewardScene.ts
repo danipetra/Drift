@@ -6,6 +6,7 @@ import { MAX_DECK_SIZE, TowerRun } from "../../game/TowerRun";
 import { resolveNode, type TowerNode } from "../../game/towerMap";
 import { pickRewardChoices } from "../../game/towerRewards";
 import { CARD_HEIGHT, CARD_WIDTH, CardView } from "../../render/CardView";
+import { FONT_BODY, FONT_DISPLAY } from "../../render/fonts";
 import { BaseScene } from "./BaseScene";
 import { TowerDiscardScene } from "./TowerDiscardScene";
 import { TowerMapScene } from "./TowerMapScene";
@@ -28,15 +29,15 @@ export class TowerRewardScene extends BaseScene {
     this.node = node;
     this.titleText = new Text({
       text: "Nuova carta",
-      style: { fontFamily: "sans-serif", fontSize: 24, fontWeight: "bold", fill: 0xffffff, align: "center" },
+      style: { fontFamily: FONT_DISPLAY, fontSize: 24, fill: 0xffffff, align: "center" },
     });
     this.subtitleText = new Text({
       text: "Scegli una carta da aggiungere al mazzo",
-      style: { fontFamily: "sans-serif", fontSize: 14, fill: 0xb0bec5, align: "center" },
+      style: { fontFamily: FONT_BODY, fontSize: 14, fill: 0xb0bec5, align: "center" },
     });
     this.skipText = new Text({
       text: "Salta ricompensa",
-      style: { fontFamily: "sans-serif", fontSize: 13, fill: 0x8a919a, align: "center" },
+      style: { fontFamily: FONT_BODY, fontSize: 13, fill: 0x8a919a, align: "center" },
     });
     this.container.addChild(this.titleText, this.subtitleText, this.skipText);
   }
