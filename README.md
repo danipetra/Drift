@@ -39,9 +39,11 @@ Play alternates between the two sides. On your turn:
 3. Choose your attackers:
    - Clicking an untapped **melee** card immediately marks it as attacking
      (its target is fixed — whatever sits in the same column).
-   - Clicking an untapped **ranged** card arms it for targeting: pick any
-     legal enemy card, or the "Strike the face" button, to lock in its
-     target.
+   - Clicking an untapped **ranged** card arms it for targeting: legal enemy
+     cards light up individually, and if an enemy lane has *no* creatures in
+     it at all, that whole lane lights up as a single target that strikes
+     the face directly. A lane with even one creature in it only offers
+     that creature — no sniping the face past a defended lane.
    - Any card that would be lethal to its (would-be) target shows a **💀 KO**
      marker on the target, so you can preview the outcome before confirming.
 4. Press **Attack** to resolve combat, or **Cancel** to clear your current
@@ -93,12 +95,55 @@ routine each turn:
 There's no trade evaluation or lookahead — it's a baseline opponent, not a
 strategic one.
 
+## Tower Climb
+
+The second game mode: an endless run across a branching map of nodes
+([game/towerMap.ts](src/game/towerMap.ts)) instead of one-off matches. Each
+map is 4 layers × 3 lanes, always connected by construction (every node
+links to the same lane next layer, and a 50% chance of an adjacent one too),
+funneling into a single boss node. Beating the boss doesn't end the run — it
+generates a fresh map and keeps going, so a climb only ends when you lose.
+
+Node types, picked by weighted random roll:
+
+| Node | What happens |
+| --- | --- |
+| `fight` | A standard match against a random enemy deck. |
+| `empowered` | Same, but against a bigger enemy deck (16 vs 12 cards) and a 1.5x score multiplier. |
+| `boss` | Enemy deck drawn only from cost-5+ cards, 2x score multiplier. |
+| `add_card` | Pick 1 of 3 random cards from the whole catalog to add to your run deck (or discard an existing one if you're at the 20-card cap). |
+| `sacrifice` | Remove a modifier-bearing card from your deck to graft its modifier onto another card. |
+| `fusion` | Merge two identical copies of a card into one with double stats and +1 cost. |
+
+`sacrifice` and `fusion` produce one-off synthetic cards (ids like `sac:0`,
+`fuse:1`) registered at runtime via
+[`cardLoader.registerCustomCard`](src/data/cardLoader.ts) — they exist only
+for that run's deck and are never added to the permanent collection.
+
+Floor score ([game/towerScoring.ts](src/game/towerScoring.ts)) starts from a
+fixed base and is eroded by turns taken and damage received, with a small
+bonus for finishing with a health margin. Losing (or drawing) ends the run
+and records the final score to the local leaderboard
+([game/Leaderboard.ts](src/game/Leaderboard.ts), top 10, no backend).
+
+## Deck Builder & progression
+
+Your collection and deck persist in `localStorage`
+([game/PlayerProfile.ts](src/game/PlayerProfile.ts)): up to 3 copies
+unlocked per card, up to 20 cards in your deck. Tower Climb rewards
+(`add_card` nodes) unlock cards into this permanent collection even if that
+particular run is later lost. The Deck Builder screen also lets you export
+your save to a JSON file and re-import it (e.g. to move progress to another
+browser) — see "Esporta/Importa salvataggio" in its HUD.
+
 ## Card preview and feedback
 
-Long-pressing any card — in hand or on the board, yours or the opponent's —
-pops up an enlarged preview (left side for your cards, right side for the
-opponent's) so you can read small text without losing your place on the
-board.
+Long-pressing any card — in hand or on the board, yours or the opponent's, or
+a tile in the Deck Builder or Tower Climb — pops up an enlarged preview (left
+side for your cards, right side for the opponent's during a match; centered
+everywhere else) so you can read small text without losing your place.
+[`render/cardPreview.ts`](src/render/cardPreview.ts) builds the enlarged
+view once and is reused by every screen that needs it.
 
 ![Ranged targeting with a death-marker preview](docs/media/ranged-targeting.png)
 ![Long-press card preview](docs/media/zoom-preview.png)
@@ -125,7 +170,9 @@ you always see the full story of a turn before acting again.
 ![Melee attack animation](docs/media/melee-attack.gif)
 ![Card deal animation](docs/media/card-deal.gif)
 
-## Card art pipeline
+## Visual identity
+
+### Card art pipeline
 
 Cards render with real art when available and fall back to a plain
 programmatic frame otherwise — nothing has to opt in or out of art support.
@@ -134,7 +181,7 @@ Adding art for a card is just dropping a correctly-named PNG in place:
 ```
 src/assets/cards/
   backs/<type>.png       card back, one per card type
-  frames/<type>.png      frame/background, one per card type
+  frames/<type>.png      full-card frame illustration, one per card type
   art/<card id>.png      illustration, one per card (e.g. beast_wolf.png)
 ```
 
@@ -144,6 +191,42 @@ needed" spirit as the JSON card data below. All discovered textures are
 preloaded once via `Assets.load` at startup (`Texture.from` alone does not
 trigger a fetch for an unregistered URL, which is a Pixi.js gotcha worth
 knowing if textures render blank).
+
+Frames are full-card illustrations with a free-form transparent window cut
+into the middle (not a plain rectangle), so [`CardView`](src/render/CardView.ts)
+covers the *entire* card in "cover" mode (scaled uniformly, cropped, never
+stretched) and lets the frame's opaque border mask it for free — whatever
+art sticks out past the window just sits behind the painted border. The art
+sprite carries its own rounded-rect mask (matching the frame's corner
+radius) so it never bleeds past the card's rounded silhouette into a lane's
+background.
+
+### Fonts
+
+Two self-hosted, subsetted Google Fonts, loaded via the `FontFace` API and
+awaited before the first scene mounts ([render/fonts.ts](src/render/fonts.ts)):
+
+- **Jacquard 12 / 24** (blackletter, pixel-edged) for titles, menu entries,
+  card names, and other primary choices (Tower Climb nodes, modal panel
+  buttons). 24 is only used for the "DRIFT" home screen title; 12 for
+  everything else at this weight.
+- **DotGothic16** (dot-matrix) for everything else — stats, HUD, log,
+  descriptions. It replaced an earlier pick (Pixelify Sans) whose stylized
+  digits made "2" and "8" (and "5" and "S") visually indistinguishable at
+  the sizes cards use — a real problem in a game whose cards are covered in
+  numbers.
+
+`CardView`'s text renders at `resolution: 2` so it stays crisp when scaled
+up in the long-press preview instead of upscaling a low-res canvas.
+
+### Per-scene backgrounds
+
+Each scene can set its own background image via `BaseScene.setBackground(key)`,
+which looks up `src/assets/ui/backgrounds/<key>.png`
+([render/sceneBackgrounds.ts](src/render/sceneBackgrounds.ts)) — same
+discovery-by-filename convention as card art. It scales to cover the screen
+without distortion and re-fits on resize. A scene with no matching file
+just keeps the app's base background color.
 
 ## Card and deck data
 
@@ -178,37 +261,53 @@ src/
   data/
     cards/*.json         Card set, data-driven (beast.json, robot.json)
     decks/*.json         Deck lists (ordered card ids)
-    cardLoader.ts         Typed access to the card set
+    cardLoader.ts         Typed access to the card set + runtime-registered custom cards
+    enemyDecks.ts          Random/empowered/boss enemy deck generation
   game/
     CardInstance.ts       Runtime instance of a card (current atk/def, tapped, cost)
     BoardState.ts          Pure board state: 4 lanes, health, slots
     Deck.ts                 Shuffled draw pile
+    deckRules.ts             Shared deck-size/copy-limit constants
     combat.ts               Combat resolution and modifier rules
     ai.ts                   Opponent: reinforce / play / attack
+    TowerRun.ts              State for one Tower Climb run (map, score, deck)
+    towerMap.ts               Branching node-map generation and node resolution
+    towerScoring.ts            Floor score formula
+    towerRewards.ts             Random reward-card picking
+    PlayerProfile.ts           Persisted collection + deck (localStorage)
+    Leaderboard.ts              Persisted top-10 Tower Climb scores (localStorage)
   board/
     Board.ts              Pixi container laying out the 4 lanes and health text
-    Lane.ts                A single lane (row of slots) and its CardViews
+    Lane.ts                A single lane (row of slots), its CardViews, and the whole-lane ranged target
   hand/
     HandView.ts           Player's hand of cards
   render/
     CardView.ts            Pixi rendering of a single card, incl. long-press gesture
     cardAssets.ts           Art/frame/back asset discovery and preloading
+    sceneBackgrounds.ts      Per-scene background discovery and preloading
+    fonts.ts                 Font loading (FontFace API) and family constants
     frames.ts               Fallback programmatic frame style per card type
+    cardPreview.ts           Shared enlarged-card-preview builder (long-press)
+    cardGrid.ts              Shared fixed-column card grid layout (Tower Climb pick screens)
     animations.ts            GSAP animation helpers (lunge, shake, fade, streak, popups)
+    OverlayPanel.ts           Reusable modal panel (title/subtitle/buttons)
   app/
     SceneManager.ts        Owns the Pixi Application; mounts/unmounts scenes
-    scenes/*                 One class per screen (menu, match, deck builder, tower run, leaderboard, ...)
-  main.ts                 Entry point, wires SceneManager to #app
+    scenes/
+      BaseScene.ts             Shared scene boilerplate: mount/unmount, resize, per-scene background
+      BoardInteractionController.ts  What's clickable/highlighted on the board + hand, and the preview gesture
+      CombatAnimator.ts         Replays combat events as an animated sequence
+      MainMenuScene.ts, MatchScene.ts, DeckBuilderScene.ts, LeaderboardScene.ts
+      TowerMapScene.ts, towerFlow.ts, TowerRewardScene.ts, TowerDiscardScene.ts,
+      TowerSacrificeScene.ts, TowerFusionScene.ts, TowerGameOverScene.ts
+  main.ts                 Entry point: preloads textures/fonts, wires SceneManager to #app
 ```
-
-The tree above covers the core engine; it doesn't enumerate every scene or
-the Tower Climb / profile / leaderboard modules (`game/TowerRun.ts`,
-`game/PlayerProfile.ts`, `game/Leaderboard.ts`, `app/scenes/*.ts`) — see
-those files directly for the current game-mode layer.
 
 The board itself renders entirely on a **Pixi.js canvas**; the HUD (status
 text, mana, action buttons, event log) is HTML/CSS overlaid on top, defined
-in [index.html](index.html) and wired up from `Game.ts`.
+in [index.html](index.html) and populated per-scene into the `#hud-root` div
+that [`SceneManager`](src/app/SceneManager.ts) hands each scene — see
+[main.ts](src/main.ts) for the entry point that wires it all together.
 
 ## Development
 
@@ -228,6 +327,7 @@ Stack: TypeScript, [Vite](https://vite.dev/), [Pixi.js](https://pixijs.com/) v8,
   to validate the engine before expanding it.
 - The AI opponent has no trade evaluation or lookahead: it plays cheapest
   cards first and always attacks with everything untapped.
-- No persistence, matchmaking, or multiplayer — this is a local, single-tab
-  prototype (human vs AI only).
+- No matchmaking or multiplayer — human vs AI only. Collection, deck, and
+  leaderboard persist locally via `localStorage` (export/import as JSON to
+  move a save between browsers), but there's no account or server sync.
 - No sound design yet.

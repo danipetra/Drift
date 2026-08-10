@@ -1,4 +1,5 @@
-import { Container, Graphics, Text } from "pixi.js";
+import { Assets, Container, Graphics, Sprite, Text, Texture } from "pixi.js";
+import logoUrl from "../../assets/favicon.png";
 import { FONT_BODY, FONT_DISPLAY, FONT_DISPLAY_LARGE } from "../../render/fonts";
 import { BaseScene } from "./BaseScene";
 import { DeckBuilderScene } from "./DeckBuilderScene";
@@ -7,6 +8,7 @@ import { MatchScene } from "./MatchScene";
 import { startNewTowerRun } from "./towerFlow";
 
 const SECONDARY_LINK_GAP = 32;
+const TITLE_SHADOW = { color: 0x000000, blur: 6, distance: 0, alpha: 0.85 } as const;
 
 const TILE_WIDTH = 150;
 const TILE_HEIGHT = 210;
@@ -21,15 +23,29 @@ interface TileConfig {
 
 /** Schermata iniziale: titolo + 3 carte-bottone affiancate, una per modalità di gioco. */
 export class MainMenuScene extends BaseScene {
+  private readonly logo: Sprite;
   private readonly titleText: Text;
   private readonly secondaryLinks: Text[] = [];
   private readonly tileViews: Container[] = [];
 
   constructor() {
     super();
+    // Emblema dietro al titolo: creato subito per fissarne l'ordine (sotto al testo), la texture
+    // arriva dopo in `onMount` — stesso motivo dello sfondo di scena, `Texture.from` da solo non
+    // avvia il caricamento di un URL non ancora registrato.
+    this.logo = new Sprite();
+    this.logo.anchor.set(0.5);
+    this.container.addChild(this.logo);
+
     this.titleText = new Text({
       text: "DRIFT",
-      style: { fontFamily: FONT_DISPLAY_LARGE, fontSize: 40, fill: 0xd8d8d8, letterSpacing: 4 },
+      style: {
+        fontFamily: FONT_DISPLAY_LARGE,
+        fontSize: 40,
+        fill: 0xd8d8d8,
+        letterSpacing: 4,
+        dropShadow: TITLE_SHADOW,
+      },
     });
     this.container.addChild(this.titleText);
 
@@ -53,6 +69,8 @@ export class MainMenuScene extends BaseScene {
 
   protected async onMount(): Promise<void> {
     await this.setBackground("main");
+    await Assets.load(logoUrl);
+    this.logo.texture = Texture.from(logoUrl);
     this.buildTiles();
   }
 
@@ -134,14 +152,24 @@ export class MainMenuScene extends BaseScene {
 
     const titleScale = Math.min(1, (width * 0.9) / this.titleText.width);
     this.titleText.scale.set(titleScale);
-    this.titleText.position.set((width - this.titleText.width * titleScale) / 2, height * 0.28);
+    const titleTop = height * 0.08;
+    this.titleText.position.set((width - this.titleText.width * titleScale) / 2, titleTop);
+    const titleBottom = titleTop + this.titleText.height * titleScale;
+
+    // Logo sotto al titolo, non più sovrapposto: pieno alpha, quindi gli serve il suo spazio.
+    const logoGap = 16;
+    const logoSize = Math.min(width * 0.6, 240);
+    this.logo.width = logoSize;
+    this.logo.height = logoSize;
+    this.logo.position.set(width / 2, titleBottom + logoGap + logoSize / 2);
+    const logoBottom = titleBottom + logoGap + logoSize;
 
     const sideMargin = 16;
     const rawWidth = this.tileViews.length * TILE_WIDTH + (this.tileViews.length - 1) * TILE_GAP;
     const scale = Math.min(1, (width - sideMargin * 2) / rawWidth);
     const totalWidth = rawWidth * scale;
     const startX = (width - totalWidth) / 2;
-    const tileY = height * 0.42;
+    const tileY = logoBottom + 28;
     this.tileViews.forEach((tile, index) => {
       tile.scale.set(scale);
       tile.position.set(startX + index * (TILE_WIDTH + TILE_GAP) * scale, tileY);
